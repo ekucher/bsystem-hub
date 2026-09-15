@@ -24,6 +24,12 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      # Run on every build rather than only in the security workflow, so a
+      # vulnerable dependency cannot be merged while waiting for a scheduled
+      # scan.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
       - name: Typecheck
         run: npm run typecheck
 
