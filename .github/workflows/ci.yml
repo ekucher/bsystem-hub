@@ -24,6 +24,14 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Unit, integration and automated accessibility checks. The
+      # accessibility assertions run axe over every rendered page.
+      - name: Test
+        run: npm test
+
       - name: Build
         env:
           VITE_OIDC_AUTHORITY: http://localhost:9000/application/o/bsystem-hub/

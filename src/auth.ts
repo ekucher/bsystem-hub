@@ -36,11 +36,3 @@ export async function logout(): Promise<void> {
   if (!userManager) return;
   await userManager.signoutRedirect();
 }
-
-export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const user = await getUser();
-  const headers = new Headers(init.headers);
-  if (user?.access_token) headers.set("Authorization", `Bearer ${user.access_token}`);
-  headers.set("Accept", "application/json");
-  return fetch(path, { ...init, headers });
-}
