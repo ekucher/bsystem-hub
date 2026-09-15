@@ -6,22 +6,34 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; }
+button { font: inherit; }
 
 .shell { min-height: 100vh; }
 .topbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
   padding: 18px 32px;
   background: #0a3a72;
   color: white;
 }
-.topbar span { opacity: .65; }
+.topbar span { opacity: .78; }
 .topbar nav { opacity: .85; }
+.userbox { display: flex; gap: 12px; align-items: center; }
+.link-button {
+  border: 1px solid rgba(255,255,255,.35);
+  background: transparent;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 9px;
+  cursor: pointer;
+}
 .hero { padding: 56px 32px 30px; max-width: 1100px; margin: 0 auto; }
 .eyebrow { font-weight: 700; letter-spacing: .16em; color: #1677c8; }
 h1 { margin: 8px 0 12px; font-size: clamp(2.2rem, 5vw, 4.5rem); line-height: .98; }
-.hero > p:last-child { max-width: 760px; font-size: 1.1rem; color: #53637b; }
+.hero > p:last-of-type { max-width: 760px; font-size: 1.1rem; color: #53637b; }
+.identity-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -40,9 +52,44 @@ h1 { margin: 8px 0 12px; font-size: clamp(2.2rem, 5vw, 4.5rem); line-height: .98
 .card h2 { margin-top: 0; }
 .card p { color: #607089; min-height: 48px; }
 .status { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #e8f4ff; color: #0d65ad; font-size: .82rem; }
+.status.role { background: #eaf8ef; color: #17733b; }
+.center {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 32px;
+  text-align: center;
+}
+.login-screen > p { max-width: 620px; color: #607089; }
+.primary {
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 18px;
+  background: #0a63b7;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+.primary:disabled { opacity: .45; cursor: not-allowed; }
+.notice { max-width: 760px; padding: 12px 16px; border-radius: 12px; }
+.warning { background: #fff5df; color: #7a5200; border: 1px solid #f3d28c; }
+.empty-state {
+  max-width: 1100px;
+  margin: 0 auto 48px;
+  padding: 24px 32px;
+  background: white;
+  border: 1px solid #dce8f3;
+  border-radius: 18px;
+}
 footer { padding: 24px 32px 40px; text-align: center; color: #6d7b8f; }
 
+@media (max-width: 900px) {
+  .topbar { align-items: flex-start; flex-direction: column; }
+}
+
 @media (max-width: 760px) {
-  .topbar { flex-direction: column; padding: 16px 20px; }
+  .topbar { padding: 16px 20px; }
   .hero, .grid { padding-left: 20px; padding-right: 20px; }
 }
