@@ -16,6 +16,10 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.30-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
+# The base image already runs as this uid; stating it here is what makes the
+# guarantee visible to a reader and to a scanner, neither of which pulls the
+# base image to find out.
+USER 101
 # 8080 rather than 80: an unprivileged process cannot bind a privileged port.
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
