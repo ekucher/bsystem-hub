@@ -1,142 +1,134 @@
-import { useEffect, useMemo, useState } from "react";
-import { apiFetch, completeLogin, getUser, login, logout, oidcConfigured } from "./auth";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AppShell } from "./components/AppShell";
+import { Dashboard } from "./pages/Dashboard";
+import { Profile } from "./pages/Profile";
+import { Clients, Documents, Issues, Projects } from "./pages/Collections";
+import { ClientDetail, ProjectDetail } from "./pages/Details";
+import { Notifications } from "./pages/Notifications";
+import { Forbidden, NotFound } from "./pages/Status";
+import { NotificationsProvider } from "./notifications";
+import { SessionProvider, useSession } from "./session";
 
-type Me = {
-  id: string;
-  subject: string;
-  email: string;
-  name: string;
-  username: string;
-  groups: string[];
-  roles: string[];
-  permissions: string[];
-  modules: string[];
-};
+/**
+ * Routes are declared once here.
+ *
+ * A route requiring a permission is guarded, but the guard is a courtesy to
+ * the reader: the Integration Core enforces authorization on every request,
+ * and it would refuse the data even if the HUB rendered the page.
+ */
+export function AppRoutes() {
+  return (
+    // The provider wraps the routes rather than the application, so the
+    // navigation badge and the notification centre share one count.
+    <NotificationsProvider>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={<Dashboard />} />
+          <Route path="profile" element={<Profile />} />
+          {/* No guard: the platform decides per notification what this user may
+              read, so there is no single permission to check here. */}
+          <Route path="notifications" element={<Notifications />} />
+          <Route
+            path="clients"
+            element={
+              <RequirePermission permission="crm.client.read">
+                <Clients />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="clients/:id"
+            element={
+              <RequirePermission permission="crm.client.read">
+                <ClientDetail />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="projects"
+            element={
+              <RequirePermission permission="projects.task.read">
+                <Projects />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="projects/:id"
+            element={
+              <RequirePermission permission="projects.task.read">
+                <ProjectDetail />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="issues"
+            element={
+              <RequirePermission permission="projects.task.read">
+                <Issues />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="documents"
+            element={
+              <RequirePermission permission="wiki.document.read">
+                <Documents />
+              </RequirePermission>
+            }
+          />
+          <Route path="403" element={<Forbidden />} />
+          <Route path="404" element={<NotFound />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </NotificationsProvider>
+  );
+}
 
-type Module = {
-  id: string;
-  name: string;
-  description: string;
-  status: string;
-};
+function RequirePermission({ permission, children }: { permission: string; children: React.ReactNode }) {
+  const { can } = useSession();
+  return can(permission) ? <>{children}</> : <Navigate to="/403" replace />;
+}
 
-export default function App() {
-  const [me, setMe] = useState<Me | null>(null);
-  const [modules, setModules] = useState<Module[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+/** Decides between the sign-in screen and the application. */
+export function AppContent() {
+  const { status, error, configured, signIn } = useSession();
 
-  const isCallback = useMemo(() => window.location.pathname === "/auth/callback", []);
-
-  useEffect(() => {
-    let active = true;
-
-    async function bootstrap() {
-      try {
-        if (!oidcConfigured) {
-          if (active) setError("OIDC ще не налаштований. Вкажіть VITE_OIDC_AUTHORITY та VITE_OIDC_CLIENT_ID.");
-          return;
-        }
-
-        if (isCallback) {
-          await completeLogin();
-          window.history.replaceState({}, document.title, "/");
-        }
-
-        const user = await getUser();
-        if (!user || user.expired) return;
-
-        const [meResponse, modulesResponse] = await Promise.all([
-          apiFetch("/api/v1/me"),
-          apiFetch("/api/v1/modules"),
-        ]);
-
-        if (meResponse.status === 401) {
-          await logout();
-          return;
-        }
-        if (!meResponse.ok || !modulesResponse.ok) {
-          throw new Error("Integration Core повернув помилку");
-        }
-
-        if (!active) return;
-        setMe(await meResponse.json());
-        setModules(await modulesResponse.json());
-      } catch (cause) {
-        if (active) setError(cause instanceof Error ? cause.message : "Невідома помилка авторизації");
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-
-    void bootstrap();
-    return () => {
-      active = false;
-    };
-  }, [isCallback]);
-
-  if (loading) {
-    return <main className="center"><p>BSYSTEM-HUB · перевірка сесії…</p></main>;
-  }
-
-  if (!me) {
+  if (status === "loading") {
     return (
-      <main className="center login-screen">
-        <p className="eyebrow">BSYSTEM PLATFORM</p>
-        <h1>Єдиний простір для роботи</h1>
-        <p>Авторизація виконується централізовано через authentik.</p>
-        {error && <div className="notice warning">{error}</div>}
-        <button className="primary" onClick={() => void login()} disabled={!oidcConfigured}>
-          Увійти через BSYSTEM Identity
-        </button>
+      <main className="center">
+        <p role="status">BSYSTEM-HUB · перевірка сесії…</p>
       </main>
     );
   }
 
+  if (status === "authenticated") {
+    return <AppRoutes />;
+  }
+
   return (
-    <main className="shell">
-      <header className="topbar">
-        <div>
-          <strong>BSYSTEM HUB</strong>
-          <span> P0.1 Identity & RBAC</span>
+    <main className="center login-screen">
+      <p className="eyebrow">BSYSTEM PLATFORM</p>
+      <h1>Єдиний простір для роботи</h1>
+      <p>Авторизація виконується централізовано через authentik.</p>
+      {error && (
+        <div className="notice warning" role="alert">
+          {error}
         </div>
-        <nav>Dashboard · Search · Notifications · Profile</nav>
-        <div className="userbox">
-          <span>{me.name || me.username}</span>
-          <button className="link-button" onClick={() => void logout()}>Вийти</button>
-        </div>
-      </header>
-
-      <section className="hero">
-        <p className="eyebrow">BSYSTEM PLATFORM</p>
-        <h1>Вітаємо, {me.name || me.username}</h1>
-        <p>Доступ формується з груп authentik та RBAC-політик BSYSTEM-HUB.</p>
-        <div className="identity-row">
-          <span className="status">{me.email}</span>
-          {me.roles.map((role) => <span className="status role" key={role}>{role}</span>)}
-        </div>
-      </section>
-
-      {modules.length === 0 ? (
-        <section className="empty-state">
-          <h2>Немає доступних модулів</h2>
-          <p>Користувач автентифікований, але його групи ще не зіставлені з ролями BSYSTEM.</p>
-        </section>
-      ) : (
-        <section className="grid" aria-label="Доступні модулі BSYSTEM">
-          {modules.map((item) => (
-            <article className="card" key={item.id}>
-              <h2>{item.name}</h2>
-              <p>{item.description}</p>
-              <span className="status">{item.status}</span>
-            </article>
-          ))}
-        </section>
       )}
-
-      <footer>
-        Identity: authentik · Authorization: BSYSTEM RBAC · API: Integration Core
-      </footer>
+      <button type="button" className="primary" onClick={signIn} disabled={!configured}>
+        Увійти через BSYSTEM Identity
+      </button>
     </main>
+  );
+}
+
+export default function App() {
+  return (
+    <SessionProvider>
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
+    </SessionProvider>
   );
 }

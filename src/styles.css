@@ -93,3 +93,149 @@ footer { padding: 24px 32px 40px; text-align: center; color: #6d7b8f; }
   .topbar { padding: 16px 20px; }
   .hero, .grid { padding-left: 20px; padding-right: 20px; }
 }
+
+/* --- Accessibility ------------------------------------------------------ */
+
+/* A visible focus ring on every interactive element. The browser default is
+   removed by some resets and by custom control styling, and without it a
+   keyboard user cannot tell where they are on the page. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #f0b429;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The skip link stays out of the way until it is focused, then becomes the
+   first thing a keyboard user sees. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 10px 16px;
+  background: #0a3a72;
+  color: white;
+  text-decoration: none;
+}
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+}
+
+/* The main region is focused programmatically after the skip link, so it must
+   not draw a focus ring as if it were an interactive control. */
+main:focus { outline: none; }
+
+/* --- Navigation --------------------------------------------------------- */
+
+.topbar nav ul {
+  display: flex;
+  gap: 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.topbar nav a {
+  color: white;
+  text-decoration: none;
+  opacity: .8;
+  padding: 4px 2px;
+  border-bottom: 2px solid transparent;
+}
+.topbar nav a:hover { opacity: 1; }
+/* The current page is marked by more than colour, so the distinction survives
+   for a reader who cannot perceive the colour difference. */
+.topbar nav a.active {
+  opacity: 1;
+  font-weight: 600;
+  border-bottom-color: #f0b429;
+}
+
+main { padding: 0 32px 48px; }
+
+/* --- Data states -------------------------------------------------------- */
+
+.state { padding: 20px 24px; border-radius: 12px; margin: 16px 0; }
+.state-loading { color: #40566f; }
+.state-empty { background: #eef3f9; }
+.state-error { background: #fdf0ef; border: 1px solid #e6b9b4; }
+.state h2, .state h3 { margin-top: 0; }
+.muted { color: #5a6b80; font-size: .9rem; }
+
+/* --- Tables ------------------------------------------------------------- */
+
+.entity-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+.entity-table caption {
+  text-align: left;
+  padding-bottom: 8px;
+  color: #40566f;
+  font-size: .9rem;
+}
+.entity-table th, .entity-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #dbe4ef;
+}
+.entity-table th { background: #eef3f9; font-weight: 600; }
+.entity-table code { font-size: .85rem; }
+
+.pager { display: flex; gap: 12px; align-items: center; }
+.pager button {
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid #b9c8da;
+  background: white;
+  cursor: pointer;
+}
+.pager button:disabled { opacity: .5; cursor: not-allowed; }
+.pager .muted { margin-right: auto; }
+
+/* --- Definitions and tags ----------------------------------------------- */
+
+.definitions { display: grid; grid-template-columns: minmax(160px, auto) 1fr; gap: 8px 24px; }
+.definitions dt { font-weight: 600; color: #40566f; }
+.definitions dd { margin: 0; }
+
+.tag-list { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 8px 0 20px; }
+
+.grid { list-style: none; padding: 0; }
+
+/* --- Notifications ------------------------------------------------------ */
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #b3261e;
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.filter { display: inline-flex; gap: 8px; align-items: center; margin: 8px 0 4px; }
+
+.notification-list { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 12px; }
+
+.notification {
+  padding: 14px 18px;
+  border: 1px solid #dbe3ec;
+  border-radius: 12px;
+  background: #fff;
+}
+
+/* Unread is marked by a border weight and a word, not by colour alone: a
+   reader who cannot distinguish the two backgrounds still sees which is
+   which. */
+.notification.unread { border-left: 5px solid #1677c8; background: #f6fafe; }
+.notification h2 { margin: 4px 0 6px; font-size: 1.05rem; }
+.notification p { margin: 0 0 6px; }
+
+.severity { font-size: .82rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.severity-debug, .severity-info { color: #0d65ad; }
+.severity-warning { color: #7a5200; }
+.severity-error, .severity-critical { color: #a01d16; }
+.unread-dot { font-weight: 600; }
+
+.row-actions { display: flex; gap: 16px; align-items: center; }
