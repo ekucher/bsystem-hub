@@ -75,8 +75,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       try {
         if (window.location.pathname === "/auth/callback") {
-          await completeLogin();
-          window.history.replaceState({}, document.title, "/");
+          try {
+            await completeLogin();
+          } finally {
+            // The code leaves the URL whether or not the exchange succeeded.
+            // On failure it may never have been spent — oidc-client-ts rejects
+            // a state mismatch before it contacts the provider — so it can
+            // still be a live credential, and it would otherwise sit in the
+            // address bar, in the browser's history and in anything the user
+            // copies from there. Reloading would also retry an exchange that
+            // cannot succeed, turning one failure into a loop.
+            window.history.replaceState({}, document.title, "/");
+          }
         }
 
         const user = await getUser();
