@@ -27,6 +27,7 @@ src/
 | `/projects`, `/projects/:id` | `projects.task.read` |
 | `/issues` | `projects.task.read` |
 | `/documents` | `wiki.document.read` |
+| `/notifications` | any authenticated user |
 | `/403`, `/404`, anything else | — |
 
 ## Authorization is presentation only
@@ -36,6 +37,35 @@ permissions the platform resolved for the user. **This is a courtesy to the
 reader, not a security boundary.** The Integration Core enforces authorization
 on every request and would refuse the data even if the HUB rendered the page.
 A hidden link is never the reason something is protected.
+
+## Notifications
+
+`/notifications` is deliberately unguarded and its navigation entry is
+deliberately unfiltered. Every other route maps to a single permission that
+decides the whole page; a notification collection does not. What a user may
+read is decided per notification by the Integration Core — a notification
+naming their Global user ID, or addressed to a permission they hold — so any
+permission check here could only disagree with that decision. See
+`bsystem-integration-core/docs/NOTIFICATIONS.md`.
+
+The unread badge reads the count from the collection envelope, which reports
+it for the whole visible collection rather than for the page, so the HUB asks
+for a single item. It is polled every 60 seconds: the platform has no channel
+to the browser yet, and a badge that only updated on a full page reload would
+be wrong for most of a working day. A failed poll leaves the previous count in
+place and says nothing — a transient failure must not make unread
+notifications look as though they have been dealt with, and the page the user
+is actually reading reports its own failures.
+
+Marking a notification read re-reads the collection instead of patching the
+row. Read state is per user and lives on the platform; with the unread filter
+on, the notification also leaves the collection, and the counts change for
+reasons the page cannot compute.
+
+A deep link is rendered only when the platform supplied one. It omits entity
+types the HUB has no page for — servers, incidents, bugs, releases — and the
+HUB does not construct one from the entity id, because a link that leads
+nowhere is worse than no link.
 
 ## The API client
 

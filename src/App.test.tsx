@@ -15,8 +15,40 @@ const CLIENTS = {
   pagination: { total: 2, limit: 2 },
 };
 
+const NOTIFICATIONS = {
+  data: [
+    {
+      id: 91,
+      event: "backup.failed",
+      source: "operations",
+      severity: "critical" as const,
+      title: "Резервне копіювання не вдалося",
+      body: "nightly backup exited 1",
+      entity_id: "SRV-000004",
+      audience_permission: "operations.server.read",
+      occurred_at: "2026-01-06T02:14:00Z",
+      read: false,
+    },
+    {
+      id: 90,
+      event: "release.created",
+      source: "ci",
+      severity: "info" as const,
+      title: "Випуск створено",
+      deep_link: "/clients/CL-000001",
+      entity_id: "CL-000001",
+      audience_permission: "development.repo.read",
+      occurred_at: "2026-01-05T09:00:00Z",
+      read: true,
+    },
+  ],
+  pagination: { total: 2, limit: 2 },
+  unread_count: 1,
+};
+
 function platform(overrides: Record<string, { status?: number; body: unknown }> = {}) {
   return stubFetch({
+    "/api/v1/notifications": { body: NOTIFICATIONS },
     "/api/v1/modules": { body: MODULES },
     "/api/v1/clients": { body: CLIENTS },
     "/api/v1/projects": { body: { data: [], pagination: { total: 0, limit: 0 } } },
@@ -42,6 +74,7 @@ describe("routing", () => {
     { route: "/projects", heading: "Проєкти" },
     { route: "/issues", heading: "Задачі" },
     { route: "/documents", heading: "Документи" },
+    { route: "/notifications", heading: "Сповіщення" },
     { route: "/403", heading: "Немає доступу" },
     { route: "/404", heading: "Сторінку не знайдено" },
   ])("serves $route", async ({ route, heading }) => {
@@ -161,6 +194,7 @@ describe("accessibility", () => {
     { route: "/clients", name: "clients" },
     { route: "/clients/CL-000001", name: "client detail" },
     { route: "/projects", name: "empty projects" },
+    { route: "/notifications", name: "notifications" },
     { route: "/403", name: "forbidden" },
     { route: "/404", name: "not found" },
   ])("has no automated violations on the $name page", async ({ route }) => {
@@ -189,5 +223,158 @@ describe("accessibility", () => {
     renderWithSession(<AppRoutes />, { fetchImpl: platform(), signOut, route: "/documents" });
     await userEvent.click(screen.getByRole("button", { name: "Вийти" }));
     expect(signOut).toHaveBeenCalledOnce();
+  });
+});
+
+describe("notifications", () => {
+  it("shows the unread count as a navigation badge that is read out, not only shown", async () => {
+    renderWithSession(<AppRoutes />, { fetchImpl: platform() });
+    expect(await screen.findByLabelText("Непрочитаних сповіщень: 1")).toHaveTextContent("1");
+  });
+
+  // A badge showing nothing to read would be noise.
+  it("shows no badge when nothing is unread", async () => {
+    const fetchImpl = platform({
+      "/api/v1/notifications": { body: { ...NOTIFICATIONS, unread_count: 0 } },
+    });
+    renderWithSession(<AppRoutes />, { fetchImpl });
+    await screen.findByRole("heading", { level: 1, name: /Вітаємо/ });
+    await waitFor(() => expect(screen.queryByLabelText(/Непрочитаних сповіщень/)).not.toBeInTheDocument());
+  });
+
+  it("lists notifications with their severity and time", async () => {
+    renderWithSession(<AppRoutes />, { fetchImpl: platform(), route: "/notifications" });
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Резервне копіювання не вдалося" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("nightly backup exited 1")).toBeInTheDocument();
+    expect(screen.getByText(/Критично/)).toBeInTheDocument();
+    expect(screen.getByText("SRV-000004")).toBeInTheDocument();
+  });
+
+  // The platform omits a link for entity types the HUB has no page for. A
+  // link that leads nowhere is worse than none, so the page must not invent
+  // one from the entity id.
+  it("offers a link only where the platform gave one", async () => {
+    renderWithSession(<AppRoutes />, { fetchImpl: platform(), route: "/notifications" });
+    const list = await screen.findByRole("list", { name: "Список сповіщень" });
+    const rows = within(list).getAllByRole("listitem");
+    expect(within(rows[0]).queryByRole("link", { name: "Відкрити" })).not.toBeInTheDocument();
+    expect(within(rows[1]).getByRole("link", { name: "Відкрити" })).toHaveAttribute(
+      "href",
+      "/clients/CL-000001",
+    );
+  });
+
+  // Read state is per user and lives on the platform, so the page re-reads
+  // rather than deciding locally what the collection now looks like.
+  it("marks a notification read and re-reads the collection", async () => {
+    const calls: { url: string; method: string }[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      calls.push({ url, method: init?.method ?? "GET" });
+      if (url.includes("/read")) return new Response(null, { status: 204 });
+      const read = calls.filter((call) => call.method === "POST").length > 0;
+      return new Response(
+        JSON.stringify({
+          ...NOTIFICATIONS,
+          data: NOTIFICATIONS.data.map((item) => (item.id === 91 ? { ...item, read } : item)),
+          unread_count: read ? 0 : 1,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    renderWithSession(<AppRoutes />, { fetchImpl, route: "/notifications" });
+    await userEvent.click((await screen.findAllByRole("button", { name: "Позначити прочитаним" }))[0]);
+
+    await waitFor(() =>
+      expect(calls.some((call) => call.method === "POST" && call.url.includes("/api/v1/notifications/91/read"))).toBe(
+        true,
+      ),
+    );
+    // The button disappears once the platform reports it read, and the badge
+    // follows the platform's count rather than being decremented locally.
+    await waitFor(() =>
+      expect(screen.queryAllByRole("button", { name: "Позначити прочитаним" })).toHaveLength(0),
+    );
+    await waitFor(() => expect(screen.queryByLabelText(/Непрочитаних сповіщень/)).not.toBeInTheDocument());
+  });
+
+  it("filters to unread and asks the platform to do the filtering", async () => {
+    const requested: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      requested.push(url);
+      const unread = url.includes("unread=true");
+      return new Response(
+        JSON.stringify({
+          ...NOTIFICATIONS,
+          data: unread ? NOTIFICATIONS.data.filter((item) => !item.read) : NOTIFICATIONS.data,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    renderWithSession(<AppRoutes />, { fetchImpl, route: "/notifications" });
+    await screen.findByRole("heading", { level: 2, name: "Резервне копіювання не вдалося" });
+    await userEvent.click(screen.getByRole("checkbox", { name: "Лише непрочитані" }));
+
+    await waitFor(() => expect(requested.some((url) => url.includes("unread=true"))).toBe(true));
+    await waitFor(() =>
+      expect(screen.queryByRole("heading", { level: 2, name: "Випуск створено" })).not.toBeInTheDocument(),
+    );
+  });
+
+  // The page must not turn an empty collection into something that looks
+  // broken, and the message has to say which kind of empty it is.
+  it("distinguishes an empty collection from an empty filter", async () => {
+    const empty = { data: [], pagination: { total: 0, limit: 0 }, unread_count: 0 };
+    renderWithSession(<AppRoutes />, {
+      fetchImpl: platform({ "/api/v1/notifications": { body: empty } }),
+      route: "/notifications",
+    });
+    expect(await screen.findByText("Сповіщень немає.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Лише непрочитані" }));
+    expect(await screen.findByText("Непрочитаних сповіщень немає.")).toBeInTheDocument();
+  });
+
+  // A failure to read notifications is reported on the page the user is
+  // actually looking at, with the correlation id they would quote.
+  it("reports a platform failure rather than showing an empty list", async () => {
+    const fetchImpl = platform({
+      "/api/v1/notifications": { status: 503, body: { error: "notification store unavailable" } },
+    });
+    renderWithSession(<AppRoutes />, { fetchImpl, route: "/notifications" });
+    expect(await screen.findByRole("alert")).toHaveTextContent("notification store unavailable");
+  });
+
+  // A page keeps the cursors it was given rather than computing positions:
+  // the encoding is the platform's and will change.
+  it("pages with the platform's opaque cursor", async () => {
+    const requested: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      requested.push(url);
+      const second = url.includes("cursor=bjo5MQ");
+      return new Response(
+        JSON.stringify({
+          data: [NOTIFICATIONS.data[second ? 1 : 0]],
+          pagination: { total: 2, limit: 1, ...(second ? {} : { next_cursor: "bjo5MQ" }) },
+          unread_count: 1,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    renderWithSession(<AppRoutes />, { fetchImpl, route: "/notifications" });
+    await screen.findByRole("heading", { level: 2, name: "Резервне копіювання не вдалося" });
+    expect(screen.getByRole("button", { name: "Назад" })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Далі" }));
+    await waitFor(() => expect(requested.some((url) => url.includes("cursor=bjo5MQ"))).toBe(true));
+    expect(await screen.findByRole("heading", { level: 2, name: "Випуск створено" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Далі" })).toBeDisabled();
   });
 });

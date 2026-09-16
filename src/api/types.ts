@@ -89,3 +89,40 @@ export type AdapterHealth = {
   status: "ready" | "degraded" | "disabled";
   message?: string;
 };
+
+/**
+ * A platform notification.
+ *
+ * Addressing is either `recipient_id` (one person) or `audience_permission`
+ * (everyone who holds a permission); exactly one is set. The HUB never decides
+ * which notifications a user may see — the Integration Core filters the
+ * collection to the caller before it is returned.
+ */
+export type Notification = {
+  id: number;
+  event: string;
+  source: string;
+  severity: "debug" | "info" | "warning" | "error" | "critical";
+  title: string;
+  body?: string;
+  /** A HUB path, absent when the platform has no page for the entity. */
+  deep_link?: string;
+  entity_id?: string;
+  tenant_id?: string;
+  recipient_id?: string;
+  audience_permission?: string;
+  correlation_id?: string;
+  occurred_at: string;
+  /** Whether this user has marked it read. Read state is per user. */
+  read: boolean;
+};
+
+/** The notification collection envelope, which also carries the counts. */
+export type NotificationCollection = Collection<Notification> & {
+  /**
+   * Notifications visible to this user that they have not read. It describes
+   * the whole collection rather than the page, so a badge does not have to
+   * walk the history to draw a number.
+   */
+  unread_count: number;
+};

@@ -4,7 +4,9 @@ import { Dashboard } from "./pages/Dashboard";
 import { Profile } from "./pages/Profile";
 import { Clients, Documents, Issues, Projects } from "./pages/Collections";
 import { ClientDetail, ProjectDetail } from "./pages/Details";
+import { Notifications } from "./pages/Notifications";
 import { Forbidden, NotFound } from "./pages/Status";
+import { NotificationsProvider } from "./notifications";
 import { SessionProvider, useSession } from "./session";
 
 /**
@@ -16,63 +18,70 @@ import { SessionProvider, useSession } from "./session";
  */
 export function AppRoutes() {
   return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route index element={<Dashboard />} />
-        <Route path="profile" element={<Profile />} />
-        <Route
-          path="clients"
-          element={
-            <RequirePermission permission="crm.client.read">
-              <Clients />
-            </RequirePermission>
-          }
-        />
-        <Route
-          path="clients/:id"
-          element={
-            <RequirePermission permission="crm.client.read">
-              <ClientDetail />
-            </RequirePermission>
-          }
-        />
-        <Route
-          path="projects"
-          element={
-            <RequirePermission permission="projects.task.read">
-              <Projects />
-            </RequirePermission>
-          }
-        />
-        <Route
-          path="projects/:id"
-          element={
-            <RequirePermission permission="projects.task.read">
-              <ProjectDetail />
-            </RequirePermission>
-          }
-        />
-        <Route
-          path="issues"
-          element={
-            <RequirePermission permission="projects.task.read">
-              <Issues />
-            </RequirePermission>
-          }
-        />
-        <Route
-          path="documents"
-          element={
-            <RequirePermission permission="wiki.document.read">
-              <Documents />
-            </RequirePermission>
-          }
-        />
-        <Route path="403" element={<Forbidden />} />
-        <Route path="404" element={<NotFound />} />
-        <Route path="*" element={<NotFound />} />
-      </Route>
-    </Routes>
+    // The provider wraps the routes rather than the application, so the
+    // navigation badge and the notification centre share one count.
+    <NotificationsProvider>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={<Dashboard />} />
+          <Route path="profile" element={<Profile />} />
+          {/* No guard: the platform decides per notification what this user may
+              read, so there is no single permission to check here. */}
+          <Route path="notifications" element={<Notifications />} />
+          <Route
+            path="clients"
+            element={
+              <RequirePermission permission="crm.client.read">
+                <Clients />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="clients/:id"
+            element={
+              <RequirePermission permission="crm.client.read">
+                <ClientDetail />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="projects"
+            element={
+              <RequirePermission permission="projects.task.read">
+                <Projects />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="projects/:id"
+            element={
+              <RequirePermission permission="projects.task.read">
+                <ProjectDetail />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="issues"
+            element={
+              <RequirePermission permission="projects.task.read">
+                <Issues />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="documents"
+            element={
+              <RequirePermission permission="wiki.document.read">
+                <Documents />
+              </RequirePermission>
+            }
+          />
+          <Route path="403" element={<Forbidden />} />
+          <Route path="404" element={<NotFound />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </NotificationsProvider>
   );
 }
 

@@ -199,3 +199,43 @@ main { padding: 0 32px 48px; }
 .tag-list { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 8px 0 20px; }
 
 .grid { list-style: none; padding: 0; }
+
+/* --- Notifications ------------------------------------------------------ */
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #b3261e;
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.filter { display: inline-flex; gap: 8px; align-items: center; margin: 8px 0 4px; }
+
+.notification-list { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 12px; }
+
+.notification {
+  padding: 14px 18px;
+  border: 1px solid #dbe3ec;
+  border-radius: 12px;
+  background: #fff;
+}
+
+/* Unread is marked by a border weight and a word, not by colour alone: a
+   reader who cannot distinguish the two backgrounds still sees which is
+   which. */
+.notification.unread { border-left: 5px solid #1677c8; background: #f6fafe; }
+.notification h2 { margin: 4px 0 6px; font-size: 1.05rem; }
+.notification p { margin: 0 0 6px; }
+
+.severity { font-size: .82rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.severity-debug, .severity-info { color: #0d65ad; }
+.severity-warning { color: #7a5200; }
+.severity-error, .severity-critical { color: #a01d16; }
+.unread-dot { font-weight: 600; }
+
+.row-actions { display: flex; gap: 16px; align-items: center; }

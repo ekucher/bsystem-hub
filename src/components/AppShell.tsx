@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useSession } from "../session";
+import { useNotifications } from "../notifications";
 
 type NavItem = { to: string; label: string; permission?: string };
 
@@ -17,11 +18,15 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/projects", label: "Проєкти", permission: "projects.task.read" },
   { to: "/issues", label: "Задачі", permission: "projects.task.read" },
   { to: "/documents", label: "Документи", permission: "wiki.document.read" },
+  // No permission: what a user may read is decided per notification by
+  // the platform, so there is nothing to hide the link behind.
+  { to: "/notifications", label: "Сповіщення" },
   { to: "/profile", label: "Профіль" },
 ];
 
 export function AppShell() {
   const { me, can, signOut } = useSession();
+  const { unreadCount } = useNotifications();
   const items = NAV_ITEMS.filter((item) => !item.permission || can(item.permission));
 
   return (
@@ -42,6 +47,13 @@ export function AppShell() {
               <li key={item.to}>
                 <NavLink to={item.to} end={item.to === "/"}>
                   {item.label}
+                  {item.to === "/notifications" && unreadCount > 0 && (
+                    /* The count is read out as well as shown: a badge that is
+                       only a coloured dot tells a screen reader nothing. */
+                    <span className="badge" aria-label={`Непрочитаних сповіщень: ${unreadCount}`}>
+                      {unreadCount}
+                    </span>
+                  )}
                 </NavLink>
               </li>
             ))}
