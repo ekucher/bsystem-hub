@@ -1,117 +1,26 @@
-# BSYSTEM-HUB API Contract
+# API
 
-Base path: `/api/v1`
+**The authoritative contract is
+[`bsystem-integration-core/docs/openapi.yaml`](https://github.com/ekucher/bsystem-integration-core/blob/main/docs/openapi.yaml),
+with the conventions behind it in
+[`API.md`](https://github.com/ekucher/bsystem-integration-core/blob/main/docs/API.md).**
 
-## Conventions
+This file used to describe an API surface the HUB would serve. The HUB serves
+none: it is a static bundle behind nginx, and every request it makes goes to
+the Integration Core.
 
-- JSON request/response bodies
-- UTF-8
-- ISO 8601 timestamps in UTC
-- `X-Request-ID` accepted and propagated
-- authenticated endpoints require a valid HUB session derived from authentik OIDC
-- authorization is always enforced server-side
+## What this repository does document
 
-## Error format
+- [FRONTEND.md](FRONTEND.md) — how the HUB consumes that API: the client, the
+  data states, pagination, and why authorization in the interface is
+  presentation only.
+- `src/api/types.ts` — the TypeScript mirror of the contract. It contains no
+  upstream field name — no EspoCRM `accountId`, no Redmine `identifier` —
+  except where the normalized contract itself exposes one.
 
-```json
-{
-  "error": {
-    "code": "forbidden",
-    "message": "Access denied",
-    "request_id": "REQ-01H..."
-  }
-}
-```
+## The one rule
 
-## GET /me
-
-Returns current identity and effective access.
-
-```json
-{
-  "id": "USR-000001",
-  "subject": "authentik-subject-id",
-  "email": "user@bsystem.com.ua",
-  "name": "User Name",
-  "groups": ["BSYSTEM-Developers"],
-  "roles": ["Developer"],
-  "permissions": [
-    "projects.task.read",
-    "development.repo.read",
-    "qa.testcase.read"
-  ]
-}
-```
-
-## GET /modules
-
-Returns only modules the current user may see.
-
-```json
-{
-  "items": [
-    {
-      "id": "projects",
-      "name": "BSYSTEM Projects",
-      "url": "https://projects.example.local",
-      "status": "available"
-    }
-  ]
-}
-```
-
-## GET /permissions
-
-Returns effective permissions and scopes.
-
-```json
-{
-  "roles": ["Developer"],
-  "permissions": ["projects.task.read"],
-  "scopes": {
-    "projects": ["PR-000103"]
-  }
-}
-```
-
-## GET /health
-
-Unauthenticated operational endpoint.
-
-```json
-{
-  "status": "ok",
-  "service": "bsystem-hub",
-  "version": "0.1.0",
-  "timestamp": "2026-09-15T19:00:00Z"
-}
-```
-
-## Future endpoints
-
-Planned after P0:
-
-- `GET /clients`
-- `GET /clients/{id}`
-- `GET /projects`
-- `GET /projects/{id}`
-- `GET /servers`
-- `GET /servers/{id}`
-- `GET /notifications`
-- `GET /search`
-- `GET /dashboard`
-
-## HTTP semantics
-
-- `200` success
-- `201` created
-- `204` success without body
-- `400` invalid request
-- `401` unauthenticated
-- `403` authenticated but forbidden
-- `404` resource not found or intentionally hidden by authorization policy
-- `409` conflict
-- `422` validation error
-- `429` rate limit
-- `500` internal error
-- `503` dependent service unavailable
+**The HUB consumes the normalized API and nothing else.** It never reaches an
+upstream system, never handles an upstream payload shape, and never
+reconstructs a platform decision locally. If something the HUB needs is not in
+the normalized contract, the fix is in the Integration Core.
