@@ -10,6 +10,60 @@ permissions:
   contents: read
 
 jobs:
+  # A cross-repository gate: the HUB consumes the Integration Core's normalized
+  # API, the two are versioned independently, and nothing connected them. The
+  # HUB's own tests answer every request from a fake, so a path renamed in the
+  # platform leaves this repository green and the failure waits for a browser.
+  contract:
+    name: Normalized API contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          path: bsystem-hub
+
+      # The matching branch where one exists, so a paired change is validated
+      # against its pair rather than against main. A missing match falls back
+      # to main and says so in the run summary, because most HUB changes have
+      # no paired platform branch and failing them all would make the gate an
+      # obstacle rather than a check.
+      - name: Resolve the Integration Core branch
+        id: core-ref
+        run: |
+          ref="${{ github.head_ref || github.ref_name }}"
+          if git ls-remote --exit-code --heads https://github.com/ekucher/bsystem-integration-core "$ref" >/dev/null 2>&1; then
+            echo "ref=$ref" >> "$GITHUB_OUTPUT"
+            echo "Validating against the matching Integration Core branch \`$ref\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+            echo "No matching Integration Core branch; validating against \`main\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Checkout Integration Core
+        uses: actions/checkout@v7
+        with:
+          repository: ekucher/bsystem-integration-core
+          ref: ${{ steps.core-ref.outputs.ref }}
+          path: bsystem-integration-core
+
+      # Which pair was actually validated. Without this the run says the
+      # contract holds without saying what it holds against, and a green badge
+      # on a stale provider is the thing this gate exists to prevent.
+      - name: Record the pair
+        working-directory: bsystem-integration-core
+        run: |
+          echo "Integration Core commit: \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # Python rather than a Node dependency: this is a CI check, and adding a
+      # YAML parser to the application's dependency tree to run it would put a
+      # package in the shipped manifest for the sake of a workflow.
+      - name: Check every requested path exists
+        working-directory: bsystem-hub
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/check-api-contract.py
+
   build:
     runs-on: ubuntu-latest
     steps:
