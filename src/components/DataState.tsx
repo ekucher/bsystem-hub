@@ -47,7 +47,7 @@ export function ErrorState({ error }: { error: ApiError }) {
   return (
     <div className="state state-error" role="alert">
       <h2>{title(error)}</h2>
-      <p>{error.message}</p>
+      <p>{explanation(error) ?? error.message}</p>
       {error.source && <p className="muted">Джерельна система: {error.source}</p>}
       {error.requestId && (
         <p className="muted">
@@ -63,5 +63,31 @@ function title(error: ApiError): string {
   if (error.isNotFound) return "Не знайдено";
   if (error.isUpstream) return "Джерельна система недоступна";
   if (error.isUnauthenticated) return "Сесія завершилася";
+  // A deployment that leaves an integration out is a supported configuration,
+  // not a failure, and it is the state a reader meets most often on a stage
+  // deployment. Falling through to "Помилка" reports it as a fault and leaves
+  // the reader with nothing to do about it.
+  if (error.isNotConfigured) return "Інтеграцію не налаштовано";
+  if (error.isCapabilityUnsupported) return "Інтеграція не підтримує цю дію";
+  if (error.isUnavailable) return "Платформа тимчасово недоступна";
   return "Помилка";
+}
+
+/**
+ * A Ukrainian explanation for the failures whose cause the platform states
+ * unambiguously through a code.
+ *
+ * Elsewhere the platform's own summary is shown unchanged, because only it
+ * knows what went wrong. For these two the code says it exactly, and the
+ * reader's next step differs: one is a setting somebody has to supply, the
+ * other is a limit of the deployed version that no setting will change.
+ */
+function explanation(error: ApiError): string | null {
+  if (error.isNotConfigured) {
+    return "Цю джерельну систему не підключено в цьому середовищі. Дані недоступні, доки її не налаштують — це не збій платформи.";
+  }
+  if (error.isCapabilityUnsupported) {
+    return "Джерельну систему підключено, але її адаптер не вміє виконати цей запит у цій версії платформи.";
+  }
+  return null;
 }

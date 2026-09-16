@@ -43,6 +43,36 @@ export class ApiError extends Error {
   get isUpstream(): boolean {
     return this.status === 502;
   }
+
+  /**
+   * The platform could not serve the request because something it depends on
+   * is unavailable. Distinct from `isUpstream`: there the source system was
+   * reached and failed; here it was never reached at all.
+   */
+  get isUnavailable(): boolean {
+    return this.status === 503;
+  }
+
+  /**
+   * The integration this endpoint reads from is not configured in this
+   * deployment.
+   *
+   * This is a supported configuration, not a fault — a stage deployment may
+   * deliberately leave a source system out — so it must not be presented as a
+   * failure. It is also the one error state the reader can act on themselves,
+   * which is why it is worth telling apart from the rest.
+   */
+  get isNotConfigured(): boolean {
+    return this.code === "adapter_not_configured";
+  }
+
+  /**
+   * The integration is configured but cannot do what this endpoint needs.
+   * Unlike `isNotConfigured`, configuring it differently will not help.
+   */
+  get isCapabilityUnsupported(): boolean {
+    return this.code === "capability_unsupported";
+  }
 }
 
 /** Raised when a request is abandoned because the caller navigated away. */
