@@ -15,18 +15,25 @@ const CLIENTS = {
   pagination: { total: 2, limit: 2 },
 };
 
-const USERS = [
-  {
-    id: "USR-000005",
-    subject: "authentik-admin-subject",
-    email: "admin@bsystem.example.invalid",
-    display_name: "Platform Administrator",
-    username: "admin",
-    groups: ["BSYSTEM-Admins"],
-    first_seen_at: "2026-09-17T10:00:00Z",
-    last_seen_at: "2026-09-18T01:00:00Z",
-  },
-];
+const ACCOUNTS = {
+  management_available: true,
+  accounts: [
+    {
+      authentik_id: 5,
+      global_id: "USR-000005",
+      username: "admin",
+      name: "Platform Administrator",
+      email: "admin@bsystem.example.invalid",
+      active: true,
+      roles: ["admin"],
+      groups: ["BSYSTEM-Admins"],
+      first_seen_at: "2026-09-17T10:00:00Z",
+      last_seen_at: "2026-09-18T01:00:00Z",
+      manageable: true,
+      password_manageable: true,
+    },
+  ],
+};
 
 const NOTIFICATIONS = {
   data: [
@@ -63,7 +70,7 @@ function platform(overrides: Record<string, { status?: number; body: unknown }> 
   return stubFetch({
     "/api/v1/notifications": { body: NOTIFICATIONS },
     "/api/v1/modules": { body: MODULES },
-    "/api/v1/admin/users": { body: USERS },
+    "/api/v1/admin/accounts": { body: ACCOUNTS },
     "/api/v1/clients": { body: CLIENTS },
     "/api/v1/projects": { body: { data: [], pagination: { total: 0, limit: 0 } } },
     "/api/v1/issues": { body: { data: [], pagination: { total: 0, limit: 0 } } },
@@ -156,12 +163,66 @@ describe("authorization in the interface", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Немає доступу" })).toBeInTheDocument();
   });
 
-  it("renders persistent identities with their immutable Global IDs", async () => {
+  it("renders authentik accounts with their immutable Global IDs", async () => {
     renderWithSession(<AppRoutes />, { fetchImpl: platform(), route: "/admin/users" });
     const table = await screen.findByRole("table", { name: "Користувачі BSYSTEM та їхні Global ID" });
-    expect(within(table).getByText("Platform Administrator")).toBeInTheDocument();
-    expect(within(table).getByText("USR-000005")).toBeInTheDocument();
-    expect(within(table).getByText("BSYSTEM-Admins")).toBeInTheDocument();
+    const row = within(table).getByText("Platform Administrator").closest("tr");
+    expect(row).not.toBeNull();
+    const cells = (row as HTMLTableRowElement).querySelectorAll("td");
+    expect(cells[2]).toHaveTextContent("USR-000005");
+    expect(cells[4]).toHaveTextContent("Адміністратор");
+    expect(cells[5]).toHaveTextContent("Активний");
+  });
+
+  it("creates a human account without putting the password in the URL", async () => {
+    const calls: { url: string; method: string; body?: string }[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = init?.method ?? "GET";
+      const body = typeof init?.body === "string" ? init.body : undefined;
+      calls.push({ url, method, body });
+
+      if (url.includes("/api/v1/notifications")) {
+        return new Response(JSON.stringify(NOTIFICATIONS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/v1/admin/accounts") && method === "POST") {
+        return new Response(JSON.stringify({
+          authentik_id: 9,
+          username: "new.user",
+          name: "New User",
+          email: "new@example.invalid",
+          active: true,
+          roles: ["support"],
+          groups: ["BSYSTEM-Support"],
+          manageable: true,
+          password_manageable: true,
+        }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/v1/admin/accounts")) {
+        return new Response(JSON.stringify(ACCOUNTS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: "not stubbed" }), { status: 404, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+
+    renderWithSession(<AppRoutes />, { fetchImpl, route: "/admin/users" });
+    await userEvent.click(await screen.findByText("+ Створити користувача"));
+    const usernameInput = screen.getByLabelText("Логін");
+    const createForm = usernameInput.closest("form");
+    expect(createForm).not.toBeNull();
+    const form = within(createForm as HTMLFormElement);
+    await userEvent.type(usernameInput, "new.user");
+    await userEvent.type(form.getByLabelText("Імʼя"), "New User");
+    await userEvent.type(form.getByLabelText("Пошта"), "new@example.invalid");
+    await userEvent.selectOptions(form.getByLabelText("Роль"), "support");
+    await userEvent.type(form.getByLabelText("Пароль"), "Secret-123");
+    await userEvent.type(form.getByLabelText("Повторіть пароль"), "Secret-123");
+    await userEvent.click(form.getByRole("button", { name: "Створити" }));
+
+    await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
+    const create = calls.find((call) => call.method === "POST" && call.url.includes("/api/v1/admin/accounts"));
+    expect(create?.url).not.toContain("Secret-123");
+    expect(create?.body).toContain('"password":"Secret-123"');
+    expect(await screen.findByText("Користувача створено.")).toBeInTheDocument();
   });
 
   it("tells an unmapped user why they see no modules", async () => {

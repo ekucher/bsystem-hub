@@ -239,3 +239,86 @@ main { padding: 0 32px 48px; }
 .unread-dot { font-weight: 600; }
 
 .row-actions { display: flex; gap: 16px; align-items: center; }
+
+
+/* --- User administration ------------------------------------------------ */
+
+.table-scroll { overflow-x: auto; }
+
+.admin-panel,
+.account-actions {
+  margin: 16px 0;
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.admin-panel > summary,
+.account-actions > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
+.admin-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+  padding: 0 14px 14px;
+}
+
+.admin-form label,
+.account-action-grid label,
+.password-form label {
+  display: grid;
+  gap: 6px;
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.admin-form input,
+.admin-form select,
+.account-action-grid input,
+.account-action-grid select {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #b9c8da;
+  border-radius: 8px;
+  background: white;
+  color: inherit;
+}
+
+.admin-form .row-actions {
+  grid-column: 1 / -1;
+}
+
+.account-actions {
+  min-width: 230px;
+  margin: 0;
+}
+
+.account-action-grid {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.account-action-grid button {
+  padding: 8px 10px;
+  border: 1px solid #b9c8da;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.account-action-grid button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.password-form {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #dbe4ef;
+}
