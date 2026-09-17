@@ -4,6 +4,16 @@ import { DataState } from "../components/DataState";
 import { EntityTable, type Column } from "../components/EntityTable";
 import type { HumanIdentity } from "../api/types";
 
+const DATE_TIME = new Intl.DateTimeFormat("uk-UA", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : DATE_TIME.format(date);
+}
+
 const COLUMNS: Column<HumanIdentity>[] = [
   {
     key: "name",
@@ -33,7 +43,7 @@ const COLUMNS: Column<HumanIdentity>[] = [
   {
     key: "last-seen",
     header: "Останній вхід",
-    render: (item) => <time dateTime={item.last_seen_at}>{item.last_seen_at}</time>,
+    render: (item) => <time dateTime={item.last_seen_at}>{formatDateTime(item.last_seen_at)}</time>,
   },
 ];
 
