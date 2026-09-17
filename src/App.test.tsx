@@ -166,10 +166,12 @@ describe("authorization in the interface", () => {
   it("renders authentik accounts with their immutable Global IDs", async () => {
     renderWithSession(<AppRoutes />, { fetchImpl: platform(), route: "/admin/users" });
     const table = await screen.findByRole("table", { name: "Користувачі BSYSTEM та їхні Global ID" });
-    expect(within(table).getByText("Platform Administrator")).toBeInTheDocument();
-    expect(within(table).getByText("USR-000005")).toBeInTheDocument();
-    expect(within(table).getByText("Адміністратор")).toBeInTheDocument();
-    expect(within(table).getByText("Активний")).toBeInTheDocument();
+    const row = within(table).getByText("Platform Administrator").closest("tr");
+    expect(row).not.toBeNull();
+    const cells = within(row as HTMLTableRowElement);
+    expect(cells.getByText("USR-000005")).toBeInTheDocument();
+    expect(cells.getByText("Адміністратор")).toBeInTheDocument();
+    expect(cells.getByText("Активний")).toBeInTheDocument();
   });
 
   it("creates a human account without putting the password in the URL", async () => {
@@ -204,14 +206,17 @@ describe("authorization in the interface", () => {
 
     renderWithSession(<AppRoutes />, { fetchImpl, route: "/admin/users" });
     await userEvent.click(await screen.findByText("+ Створити користувача"));
-    await userEvent.type(screen.getByLabelText("Логін"), "new.user");
-    await userEvent.type(screen.getByLabelText("Імʼя"), "New User");
-    await userEvent.type(screen.getByLabelText("Пошта"), "new@example.invalid");
-    await userEvent.selectOptions(screen.getByLabelText("Роль"), "support");
-    const passwordFields = screen.getAllByLabelText(/Пароль|Повторіть пароль/);
-    await userEvent.type(passwordFields[0], "Secret-123");
-    await userEvent.type(passwordFields[1], "Secret-123");
-    await userEvent.click(screen.getByRole("button", { name: "Створити" }));
+    const usernameInput = screen.getByLabelText("Логін");
+    const createForm = usernameInput.closest("form");
+    expect(createForm).not.toBeNull();
+    const form = within(createForm as HTMLFormElement);
+    await userEvent.type(usernameInput, "new.user");
+    await userEvent.type(form.getByLabelText("Імʼя"), "New User");
+    await userEvent.type(form.getByLabelText("Пошта"), "new@example.invalid");
+    await userEvent.selectOptions(form.getByLabelText("Роль"), "support");
+    await userEvent.type(form.getByLabelText("Пароль"), "Secret-123");
+    await userEvent.type(form.getByLabelText("Повторіть пароль"), "Secret-123");
+    await userEvent.click(form.getByRole("button", { name: "Створити" }));
 
     await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
     const create = calls.find((call) => call.method === "POST" && call.url.includes("/api/v1/admin/accounts"));
