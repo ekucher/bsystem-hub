@@ -168,10 +168,10 @@ describe("authorization in the interface", () => {
     const table = await screen.findByRole("table", { name: "Користувачі BSYSTEM та їхні Global ID" });
     const row = within(table).getByText("Platform Administrator").closest("tr");
     expect(row).not.toBeNull();
-    const cells = within(row as HTMLTableRowElement);
-    expect(cells.getByText("USR-000005")).toBeInTheDocument();
-    expect(cells.getByText("Адміністратор")).toBeInTheDocument();
-    expect(cells.getByText("Активний")).toBeInTheDocument();
+    const cells = (row as HTMLTableRowElement).querySelectorAll("td");
+    expect(cells[2]).toHaveTextContent("USR-000005");
+    expect(cells[4]).toHaveTextContent("Адміністратор");
+    expect(cells[5]).toHaveTextContent("Активний");
   });
 
   it("creates a human account without putting the password in the URL", async () => {
