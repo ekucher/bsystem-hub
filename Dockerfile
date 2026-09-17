@@ -14,6 +14,17 @@ RUN npm run build
 # read-only root filesystem. The stock nginx image starts its master process as
 # root, which is what Trivy's DS-0002 flags.
 FROM nginxinc/nginx-unprivileged:1.30-alpine
+# The packages carrying vulnerabilities in an image like this are the base
+# image's own — openssl, musl, busybox — and nothing here installs anything, so
+# nothing was ever upgrading them. A base tag is rebuilt on its own schedule,
+# so an image built today can carry a library that was patched weeks ago and is
+# still waiting for the tag to move.
+#
+# Root for the upgrade and back to the unprivileged uid immediately: the base
+# image runs as 101 and the guarantee that it still does is stated below.
+USER root
+RUN apk upgrade --no-cache
+USER 101
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 # The base image already runs as this uid; stating it here is what makes the
