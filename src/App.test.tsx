@@ -82,6 +82,27 @@ describe("routing", () => {
     expect(await screen.findByRole("heading", { level: 1, name: heading })).toBeInTheDocument();
   });
 
+  it("redirects the OIDC callback route to the dashboard after authentication", async () => {
+    renderWithSession(<AppRoutes />, {
+      fetchImpl: platform(),
+      route: "/auth/callback",
+    });
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: /Вітаємо/,
+      }),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("heading", {
+        level: 1,
+        name: "Сторінку не знайдено",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   // An unknown address must land somewhere explanatory rather than on a blank
   // page that looks like a failure.
   it("shows not-found for an unknown route", async () => {
