@@ -39,6 +39,28 @@ export type HumanIdentity = {
   last_seen_at: string;
 };
 
+export type HumanRole = "admin" | "manager" | "developer" | "qa" | "support" | "devops" | "customer";
+
+export type HumanAccount = {
+  authentik_id?: number;
+  global_id?: string;
+  username: string;
+  name: string;
+  email: string;
+  active?: boolean;
+  roles: HumanRole[];
+  groups: string[];
+  first_seen_at?: string;
+  last_seen_at?: string;
+  manageable: boolean;
+  password_manageable: boolean;
+};
+
+export type HumanAccountList = {
+  management_available: boolean;
+  accounts: HumanAccount[];
+};
+
 /** Fields every normalized entity carries. */
 type Normalized = {
   /** The immutable platform Global ID. */
