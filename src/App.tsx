@@ -5,6 +5,7 @@ import { Profile } from "./pages/Profile";
 import { Clients, Documents, Issues, Projects } from "./pages/Collections";
 import { ClientDetail, ProjectDetail } from "./pages/Details";
 import { Notifications } from "./pages/Notifications";
+import { Users } from "./pages/Users";
 import { Forbidden, NotFound } from "./pages/Status";
 import { NotificationsProvider } from "./notifications";
 import { SessionProvider, useSession } from "./session";
@@ -28,6 +29,14 @@ export function AppRoutes() {
           {/* No guard: the platform decides per notification what this user may
               read, so there is no single permission to check here. */}
           <Route path="notifications" element={<Notifications />} />
+          <Route
+            path="admin/users"
+            element={
+              <RequirePermission permission="identity.user.read">
+                <Users />
+              </RequirePermission>
+            }
+          />
           <Route
             path="clients"
             element={
