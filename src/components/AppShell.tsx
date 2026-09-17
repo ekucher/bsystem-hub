@@ -21,6 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   // No permission: what a user may read is decided per notification by
   // the platform, so there is nothing to hide the link behind.
   { to: "/notifications", label: "Сповіщення" },
+  { to: "/admin/users", label: "Користувачі", permission: "identity.user.read" },
   { to: "/profile", label: "Профіль" },
 ];
 
