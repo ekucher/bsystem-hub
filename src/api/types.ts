@@ -25,6 +25,20 @@ export type Module = {
   status: string;
 };
 
+/** A human identity persisted by Integration Core after first authentication. */
+export type HumanIdentity = {
+  /** Immutable platform Global User ID. */
+  id: string;
+  /** Stable OIDC subject issued by authentik. */
+  subject: string;
+  email: string;
+  display_name: string;
+  username: string;
+  groups: string[];
+  first_seen_at: string;
+  last_seen_at: string;
+};
+
 /** Fields every normalized entity carries. */
 type Normalized = {
   /** The immutable platform Global ID. */
