@@ -15,6 +15,19 @@ const CLIENTS = {
   pagination: { total: 2, limit: 2 },
 };
 
+const USERS = [
+  {
+    id: "USR-000005",
+    subject: "authentik-admin-subject",
+    email: "admin@bsystem.example.invalid",
+    display_name: "Platform Administrator",
+    username: "admin",
+    groups: ["BSYSTEM-Admins"],
+    first_seen_at: "2026-09-17T10:00:00Z",
+    last_seen_at: "2026-09-18T01:00:00Z",
+  },
+];
+
 const NOTIFICATIONS = {
   data: [
     {
@@ -50,6 +63,7 @@ function platform(overrides: Record<string, { status?: number; body: unknown }> 
   return stubFetch({
     "/api/v1/notifications": { body: NOTIFICATIONS },
     "/api/v1/modules": { body: MODULES },
+    "/api/v1/admin/users": { body: USERS },
     "/api/v1/clients": { body: CLIENTS },
     "/api/v1/projects": { body: { data: [], pagination: { total: 0, limit: 0 } } },
     "/api/v1/issues": { body: { data: [], pagination: { total: 0, limit: 0 } } },
@@ -75,6 +89,7 @@ describe("routing", () => {
     { route: "/issues", heading: "Задачі" },
     { route: "/documents", heading: "Документи" },
     { route: "/notifications", heading: "Сповіщення" },
+    { route: "/admin/users", heading: "Користувачі" },
     { route: "/403", heading: "Немає доступу" },
     { route: "/404", heading: "Сторінку не знайдено" },
   ])("serves $route", async ({ route, heading }) => {
@@ -126,7 +141,7 @@ describe("authorization in the interface", () => {
     const nav = await screen.findByRole("navigation", { name: "Основна навігація" });
     expect(within(nav).getByRole("link", { name: "Огляд" })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Профіль" })).toBeInTheDocument();
-    for (const hidden of ["Клієнти", "Проєкти", "Задачі", "Документи"]) {
+    for (const hidden of ["Клієнти", "Проєкти", "Задачі", "Документи", "Користувачі"]) {
       expect(within(nav).queryByRole("link", { name: hidden })).not.toBeInTheDocument();
     }
   });
@@ -134,6 +149,19 @@ describe("authorization in the interface", () => {
   it("redirects a guarded route to the forbidden page", async () => {
     renderWithSession(<AppRoutes />, { fetchImpl: platform(), me: UNMAPPED, route: "/clients" });
     expect(await screen.findByRole("heading", { level: 1, name: "Немає доступу" })).toBeInTheDocument();
+  });
+
+  it("guards the user directory with the platform permission", async () => {
+    renderWithSession(<AppRoutes />, { fetchImpl: platform(), me: UNMAPPED, route: "/admin/users" });
+    expect(await screen.findByRole("heading", { level: 1, name: "Немає доступу" })).toBeInTheDocument();
+  });
+
+  it("renders persistent identities with their immutable Global IDs", async () => {
+    renderWithSession(<AppRoutes />, { fetchImpl: platform(), route: "/admin/users" });
+    const table = await screen.findByRole("table", { name: "Користувачі BSYSTEM та їхні Global ID" });
+    expect(within(table).getByText("Platform Administrator")).toBeInTheDocument();
+    expect(within(table).getByText("USR-000005")).toBeInTheDocument();
+    expect(within(table).getByText("BSYSTEM-Admins")).toBeInTheDocument();
   });
 
   it("tells an unmapped user why they see no modules", async () => {
@@ -216,6 +244,7 @@ describe("accessibility", () => {
     { route: "/clients/CL-000001", name: "client detail" },
     { route: "/projects", name: "empty projects" },
     { route: "/notifications", name: "notifications" },
+    { route: "/admin/users", name: "user directory" },
     { route: "/403", name: "forbidden" },
     { route: "/404", name: "not found" },
   ])("has no automated violations on the $name page", async ({ route }) => {
