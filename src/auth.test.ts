@@ -86,7 +86,7 @@ describe("the OIDC client configuration", () => {
     await loadAuth(CONFIGURED);
 
     const config = UserManager.mock.calls[0][0];
-    expect(config.scope).toBe("openid profile email");
+    expect(config.scope).toBe("openid profile email entitlements");
     expect(config.loadUserInfo).toBe(true);
   });
 });
