@@ -19,6 +19,7 @@ nonexistent path is not drift.
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -27,8 +28,14 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 # Matches the layout documented in CLAUDE.md: the repositories sit side by side.
-SPEC = ROOT.parent / "bsystem-integration-core" / "docs" / "openapi.yaml"
-SOURCE = ROOT / "src"
+#
+# Both are overridable, and only so that the gate itself can be tested. A gate
+# that has only ever been run against a spec and a source tree that agree has
+# never been shown to catch a change that breaks them — and a consumer gate
+# that silently stopped failing is worse than none, because the badge says
+# otherwise. See scripts/tests/contract-gate.test.sh.
+SPEC = Path(os.environ.get("CONTRACT_SPEC") or ROOT.parent / "bsystem-integration-core" / "docs" / "openapi.yaml")
+SOURCE = Path(os.environ.get("CONTRACT_SOURCE") or ROOT / "src")
 
 # Both the quoted form and the template-literal form, because an identifier
 # interpolated into a path is exactly the case most likely to be renamed.
@@ -50,7 +57,8 @@ def requested() -> dict[str, list[str]]:
                 # A query string is not part of the path the platform routes on.
                 path = raw.split("?", 1)[0]
                 path = INTERPOLATION.sub("{}", path).rstrip("/")
-                found.setdefault(path, []).append(f"{source.relative_to(ROOT)}:{number}")
+                where = source if not source.is_relative_to(ROOT) else source.relative_to(ROOT)
+                found.setdefault(path, []).append(f"{where}:{number}")
     return found
 
 

@@ -64,6 +64,14 @@ jobs:
           python3 -m pip install --quiet pyyaml
           python3 scripts/check-api-contract.py
 
+      # The gate itself, against fixtures. It has only ever been run against a
+      # specification and a source tree that agree, so it has never been shown
+      # to catch a change that breaks them — and a gate that silently stopped
+      # failing is worse than none, because the badge says otherwise.
+      - name: Check the gate catches a breaking provider change
+        working-directory: bsystem-hub
+        run: bash scripts/tests/contract-gate.test.sh
+
   build:
     runs-on: ubuntu-latest
     steps:
