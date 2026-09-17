@@ -76,6 +76,7 @@ export function AppRoutes() {
               </RequirePermission>
             }
           />
+          <Route path="auth/callback" element={<Navigate to="/" replace />} />
           <Route path="403" element={<Forbidden />} />
           <Route path="404" element={<NotFound />} />
           <Route path="*" element={<NotFound />} />
