@@ -23,8 +23,8 @@ export function Dashboard() {
         </div>
       </section>
 
-      <section aria-labelledby="modules-heading">
-        <h2 id="modules-heading">Доступні модулі</h2>
+      <section className="modules-section" aria-labelledby="modules-heading">
+        <h2 id="modules-heading">Ваші модулі</h2>
         <DataState
           state={modules}
           isEmpty={(data) => data.length === 0}
