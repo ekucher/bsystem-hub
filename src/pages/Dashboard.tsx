@@ -3,6 +3,35 @@ import { useResource } from "../hooks/useResource";
 import { DataState } from "../components/DataState";
 import type { Module } from "../api/types";
 
+const moduleLinks: Record<string, string> = {
+  redmine: "http://localhost:18103/",
+  outline: "http://localhost:18101/",
+};
+
+function ModuleCard({ item }: { item: Module }) {
+  const href = moduleLinks[item.id];
+
+  const content = (
+    <>
+      <h3>{item.name}</h3>
+      <p>{item.description}</p>
+      <span className="status">{item.status}</span>
+    </>
+  );
+
+  if (!href) {
+    return <li className="card">{content}</li>;
+  }
+
+  return (
+    <li>
+      <a className="card module-card-link" href={href}>
+        {content}
+      </a>
+    </li>
+  );
+}
+
 export function Dashboard() {
   const { api, me } = useSession();
   const modules = useResource((signal) => api.request<Module[]>("/api/v1/modules", { signal }), [api]);
@@ -38,11 +67,7 @@ export function Dashboard() {
           {(data) => (
             <ul className="grid" role="list">
               {data.map((item) => (
-                <li className="card" key={item.id}>
-                  <h3>{item.name}</h3>
-                  <p>{item.description}</p>
-                  <span className="status">{item.status}</span>
-                </li>
+                <ModuleCard key={item.id} item={item} />
               ))}
             </ul>
           )}
