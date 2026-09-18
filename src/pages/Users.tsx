@@ -169,6 +169,7 @@ function AccountActions({
   onChanged: () => void;
 }) {
   const { api } = useSession();
+  const [email, setEmail] = useState(account.email);
   const [role, setRole] = useState<HumanRole>(account.roles[0] ?? "customer");
   const [password, setPassword] = useState("");
   const [passwordAgain, setPasswordAgain] = useState("");
@@ -183,7 +184,7 @@ function AccountActions({
     return <span className="muted">{adminTarget && !canAdmin ? "Лише адміністратор" : "Недоступно"}</span>;
   }
 
-  async function patch(body: { role?: HumanRole; active?: boolean }) {
+  async function patch(body: { email?: string; role?: HumanRole; active?: boolean }) {
     setBusy(true);
     setMessage(null);
     try {
@@ -192,6 +193,9 @@ function AccountActions({
         body,
       });
       setMessage("Збережено.");
+      if (body.email !== undefined) {
+        setEmail(body.email.trim());
+      }
       onChanged();
     } catch (cause) {
       setMessage(errorMessage(cause));
@@ -227,6 +231,19 @@ function AccountActions({
     <details className="account-actions">
       <summary>Керувати</summary>
       <div className="account-action-grid">
+        <label>
+          Пошта
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={busy}
+          />
+        </label>
+        <button type="button" disabled={busy || email.trim() === ""} onClick={() => void patch({ email: email.trim() })}>
+          Зберегти пошту
+        </button>
         <label>
           Роль
           <select value={role} onChange={(event) => setRole(event.target.value as HumanRole)} disabled={busy}>
