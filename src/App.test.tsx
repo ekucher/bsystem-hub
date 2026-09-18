@@ -225,6 +225,52 @@ describe("authorization in the interface", () => {
     expect(await screen.findByText("Користувача створено.")).toBeInTheDocument();
   });
 
+  it("updates a human account email through the admin API", async () => {
+    const calls: { url: string; method: string; body?: string }[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = init?.method ?? "GET";
+      const body = typeof init?.body === "string" ? init.body : undefined;
+      calls.push({ url, method, body });
+
+      if (url.includes("/api/v1/notifications")) {
+        return new Response(JSON.stringify(NOTIFICATIONS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.endsWith("/api/v1/admin/accounts/5") && method === "PATCH") {
+        return new Response(JSON.stringify({
+          ...ACCOUNTS.accounts[0],
+          email: "admin.updated@example.invalid",
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/v1/admin/accounts")) {
+        return new Response(JSON.stringify(ACCOUNTS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: "not stubbed" }), { status: 404, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+
+    renderWithSession(<AppRoutes />, { fetchImpl, route: "/admin/users" });
+    const manage = await screen.findByText("Керувати");
+    await userEvent.click(manage);
+
+    const actions = manage.closest("details");
+    expect(actions).not.toBeNull();
+    const scope = within(actions as HTMLDetailsElement);
+    const emailInput = scope.getByLabelText("Пошта");
+
+    await userEvent.clear(emailInput);
+    await userEvent.type(emailInput, "admin.updated@example.invalid");
+    await userEvent.click(scope.getByRole("button", { name: "Зберегти пошту" }));
+
+    await waitFor(() =>
+      expect(calls.some((call) =>
+        call.method === "PATCH" &&
+        call.url.endsWith("/api/v1/admin/accounts/5") &&
+        call.body === '{"email":"admin.updated@example.invalid"}'
+      )).toBe(true),
+    );
+    expect(await scope.findByText("Збережено.")).toBeInTheDocument();
+  });
+
   it("tells an unmapped user why they see no modules", async () => {
     renderWithSession(<AppRoutes />, { fetchImpl: platform({ "/api/v1/modules": { body: [] } }), me: UNMAPPED });
     expect(await screen.findByRole("heading", { level: 3, name: "Немає доступних модулів" })).toBeInTheDocument();
