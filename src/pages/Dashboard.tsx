@@ -3,11 +3,6 @@ import { useResource } from "../hooks/useResource";
 import { DataState } from "../components/DataState";
 import type { Module } from "../api/types";
 
-const moduleLinks: Record<string, string> = {
-  redmine: "http://localhost:18103/",
-  outline: "http://localhost:18101/",
-};
-
 const moduleIcons: Record<string, string> = {
   redmine: "R",
   outline: "O",
@@ -24,7 +19,7 @@ function ModuleIcon({ item }: { item: Module }) {
 }
 
 function ModuleCard({ item }: { item: Module }) {
-  const href = moduleLinks[item.id];
+  const href = item.launch_url;
 
   const content = (
     <>
