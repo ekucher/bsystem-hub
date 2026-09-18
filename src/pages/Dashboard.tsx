@@ -8,12 +8,33 @@ const moduleLinks: Record<string, string> = {
   outline: "http://localhost:18101/",
 };
 
+const moduleIcons: Record<string, string> = {
+  redmine: "R",
+  outline: "O",
+  crm: "C",
+};
+
+function ModuleIcon({ item }: { item: Module }) {
+  const label = moduleIcons[item.id] ?? item.name.trim().charAt(0).toUpperCase() ?? "•";
+  return (
+    <span className="module-icon" aria-hidden="true">
+      {label}
+    </span>
+  );
+}
+
 function ModuleCard({ item }: { item: Module }) {
   const href = moduleLinks[item.id];
 
   const content = (
     <>
-      <h3>{item.name}</h3>
+      <div className="module-card-header">
+        <ModuleIcon item={item} />
+        <div className="module-card-title">
+          <h3>{item.name}</h3>
+          <span className="module-card-id">{item.id}</span>
+        </div>
+      </div>
       <p>{item.description}</p>
       <span className="status">{item.status}</span>
     </>
