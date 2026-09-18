@@ -23,6 +23,8 @@ export type Module = {
   name: string;
   description: string;
   status: string;
+  launch_url?: string;
+  icon?: string;
 };
 
 /** A human identity persisted by Integration Core after first authentication. */
