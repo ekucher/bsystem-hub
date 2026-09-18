@@ -153,6 +153,15 @@ main:focus { outline: none; }
 
 main { padding: 0 32px 48px; }
 
+.modules-section {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.modules-section > h2 {
+  margin: 0 0 18px;
+}
+
 /* --- Data states -------------------------------------------------------- */
 
 .state { padding: 20px 24px; border-radius: 12px; margin: 16px 0; }
