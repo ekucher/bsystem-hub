@@ -10,7 +10,7 @@ const moduleIcons: Record<string, string> = {
 };
 
 function ModuleIcon({ item }: { item: Module }) {
-  const label = moduleIcons[item.id] ?? item.name.trim().charAt(0).toUpperCase() ?? "•";
+  const label = moduleIcons[item.icon ?? ""] ?? item.name.trim().charAt(0).toUpperCase() ?? "•";
   return (
     <span className="module-icon" aria-hidden="true">
       {label}
