@@ -54,7 +54,9 @@ These belong to authentik, source systems, or Integration Core.
 
 ## Authentication and authorization
 
-Authentication is delegated to authentik using OpenID Connect.
+Authentication is delegated to authentik using OpenID Connect. authentik is the single interactive authentication authority for the ecosystem; HUB is an OIDC client and launcher, not an Identity Provider or token broker. Interactive modules are independent OIDC clients and must also support direct access through their canonical URLs. See [ADR-005](adr/ADR-005-central-sso-and-direct-module-access.md).
+
+A HUB launch URL contains navigation only. HUB access/ID tokens are never handed to a module. A module establishes its own session directly with authentik, whether it was opened from HUB or directly.
 
 Recommended separation:
 
