@@ -4,7 +4,7 @@
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | what the HUB is |
 | [FRONTEND.md](FRONTEND.md) | structure, routes, data states, pagination, accessibility |
-| [adr/](adr/) | the platform decisions taken before the split |
+| [adr/](adr/) | platform architecture decisions, including identity and SSO policy |
 
 ## Pointers, not copies
 
