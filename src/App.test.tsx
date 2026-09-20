@@ -331,8 +331,19 @@ describe("failure states", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
+  // Root cause of a previously observed "not wrapped in act(...)" warning:
+  // this test was synchronous but rendered against `platform()`'s real,
+  // eventually-resolving fetch stubs. Both CollectionPage's useResource
+  // fetch and NotificationsProvider's own fetch were left in flight when the
+  // (synchronous) test function returned; whichever later test happened to
+  // be running when those promises settled took the blame for an update
+  // React saw outside any act() scope. The loading state this test actually
+  // asserts never needs those fetches to resolve at all, so the fix removes
+  // the race at its source: a fetch stub that never settles, rather than a
+  // real one raced against the test's own synchronous return.
   it("announces loading to assistive technology", () => {
-    renderWithSession(<AppRoutes />, { fetchImpl: platform(), route: "/clients" });
+    const neverResolves = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+    renderWithSession(<AppRoutes />, { fetchImpl: neverResolves, route: "/clients" });
     expect(screen.getByRole("status")).toHaveTextContent("Завантаження…");
   });
 });
