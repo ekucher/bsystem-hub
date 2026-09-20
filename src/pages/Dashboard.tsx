@@ -1,6 +1,7 @@
 import { useSession } from "../session";
 import { useResource } from "../hooks/useResource";
 import { DataState } from "../components/DataState";
+import { safeModuleLaunchUrl } from "../lib/moduleLaunchUrl";
 import type { Module } from "../api/types";
 
 const moduleIcons: Record<string, string> = {
@@ -19,7 +20,11 @@ function ModuleIcon({ item }: { item: Module }) {
 }
 
 function ModuleCard({ item }: { item: Module }) {
-  const href = item.launch_url;
+  // Validated for protocol safety only (REM-3): javascript:/data:/file: and
+  // malformed values are rejected before this ever reaches an anchor href.
+  // Origin trust (which module origins should be allowed) is a separate,
+  // still-open decision — see REM-3-ARCH.
+  const href = safeModuleLaunchUrl(item.launch_url);
 
   const content = (
     <>
@@ -41,7 +46,7 @@ function ModuleCard({ item }: { item: Module }) {
 
   return (
     <li>
-      <a className="card module-card-link" href={href}>
+      <a className="card module-card-link" href={href} rel="noopener noreferrer">
         {content}
       </a>
     </li>
@@ -72,6 +77,7 @@ export function Dashboard() {
         <h2 id="modules-heading">Ваші модулі</h2>
         <DataState
           state={modules}
+          onRetry={modules.reload}
           isEmpty={(data) => data.length === 0}
           empty={
             <>

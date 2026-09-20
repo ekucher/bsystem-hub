@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import { DataState, ErrorState } from "./DataState";
 
@@ -101,6 +101,50 @@ describe("ErrorState", () => {
   it("announces the failure", () => {
     render(<ErrorState error={failure({ status: 503, code: "adapter_not_configured" })} />);
     expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  // REM-7: retry is offered only when it has a real chance of working.
+  describe("retry (REM-7)", () => {
+    it("offers a retry action for a network failure", () => {
+      const onRetry = vi.fn();
+      render(<ErrorState error={failure({ status: 0, message: "Не вдалося зв'язатися з Integration Core" })} onRetry={onRetry} />);
+
+      const button = screen.getByRole("button", { name: "Спробувати ще раз" });
+      fireEvent.click(button);
+      expect(onRetry).toHaveBeenCalledTimes(1);
+    });
+
+    it("offers a retry action for an upstream (502) failure", () => {
+      render(
+        <ErrorState error={failure({ status: 502, code: "upstream_unavailable" })} onRetry={() => undefined} />,
+      );
+      expect(screen.getByRole("button", { name: "Спробувати ще раз" })).toBeInTheDocument();
+    });
+
+    it("offers a retry action for an unexplained 503", () => {
+      render(<ErrorState error={failure({ status: 503, message: "RBAC store unavailable" })} onRetry={() => undefined} />);
+      expect(screen.getByRole("button", { name: "Спробувати ще раз" })).toBeInTheDocument();
+    });
+
+    it("does not offer retry for a forbidden response", () => {
+      render(<ErrorState error={failure({ status: 403, code: "permission_required" })} onRetry={() => undefined} />);
+      expect(screen.queryByRole("button", { name: "Спробувати ще раз" })).not.toBeInTheDocument();
+    });
+
+    it("does not offer retry when an integration is simply not configured", () => {
+      render(
+        <ErrorState
+          error={failure({ status: 503, code: "adapter_not_configured", source: "redmine" })}
+          onRetry={() => undefined}
+        />,
+      );
+      expect(screen.queryByRole("button", { name: "Спробувати ще раз" })).not.toBeInTheDocument();
+    });
+
+    it("does not offer retry when no onRetry handler is supplied, even for a retryable error", () => {
+      render(<ErrorState error={failure({ status: 502, code: "upstream_unavailable" })} />);
+      expect(screen.queryByRole("button", { name: "Спробувати ще раз" })).not.toBeInTheDocument();
+    });
   });
 
   it("carries the correlation id, which is how a report is traced", () => {

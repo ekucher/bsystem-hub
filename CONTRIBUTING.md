@@ -77,8 +77,13 @@ Never force-push a shared branch. Never rewrite published history.
 ## Releases and the changelog
 
 The HUB publishes no package. It is a static bundle served by nginx, built
-from a commit and shipped as a container image tagged with that SHA — so the
-commit is the version, and the commit history is the changelog.
+from a commit — the commit is the version, and the commit history is the
+changelog.
+
+This repository's own CI (`.github/workflows/ci.yml`) builds and typechecks
+the bundle but does not build or push a container image; the eventual image
+tagged with that commit's SHA is produced by a separate deployment pipeline
+outside this repository, not by anything in `.github/workflows/` here.
 
 The design system it will eventually consume is versioned separately and
 deliberately: see that repository's `docs/adr/ADR-011`. The HUB upgrades it

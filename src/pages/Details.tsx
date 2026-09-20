@@ -25,7 +25,9 @@ function DetailPage<T>({
       <p>
         <Link to={backTo}>← {backLabel}</Link>
       </p>
-      <DataState state={state}>{(item) => render(item)}</DataState>
+      <DataState state={state} onRetry={state.reload}>
+        {(item) => render(item)}
+      </DataState>
     </section>
   );
 }

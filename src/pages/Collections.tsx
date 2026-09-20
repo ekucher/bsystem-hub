@@ -41,6 +41,7 @@ function CollectionPage<T extends { id: string }>({
       <h1 id="collection-heading">{heading}</h1>
       <DataState
         state={state}
+        onRetry={state.reload}
         isEmpty={(data) => data.data.length === 0}
         empty={<p>{emptyMessage}</p>}
       >

@@ -161,13 +161,146 @@ describe("ApiClient", () => {
     expect(error).not.toBeInstanceOf(ApiError);
   });
 
-  it("passes the abort signal through to fetch", async () => {
+  // Since REM-5A, fetch receives the client's own internal AbortController
+  // signal (so a timeout can abort the same in-flight request) rather than
+  // the caller's signal by identity. What matters functionally is that
+  // aborting the caller's signal still aborts the in-flight fetch — checked
+  // here while the request is genuinely pending, not after the fact.
+  it("propagates the caller's abort signal through to an in-flight fetch", async () => {
     const controller = new AbortController();
-    const fetchImpl = vi.fn(async () => jsonResponse({}));
-    await newClient(fetchImpl as unknown as typeof fetch).request("/api/v1/me", { signal: controller.signal });
+    const fetchImpl = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          if (init.signal?.aborted) {
+            reject(new DOMException("aborted", "AbortError"));
+            return;
+          }
+          init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        }),
+    );
+
+    const pending = newClient(fetchImpl as unknown as typeof fetch).request("/api/v1/me", {
+      signal: controller.signal,
+    });
+
+    // getToken() is awaited before fetch is called, so give that microtask a
+    // turn before inspecting the mock.
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalled());
 
     const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
-    expect(init.signal).toBe(controller.signal);
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect((init.signal as AbortSignal).aborted).toBe(false);
+
+    controller.abort();
+    const error = await pending.catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(RequestCancelled);
+    expect((init.signal as AbortSignal).aborted).toBe(true);
+  });
+
+  describe("client-side request timeout (REM-5A)", () => {
+    function newTimeoutClient(fetchImpl: typeof fetch, timeoutMs: number) {
+      return new ApiClient({
+        getToken: async () => "test-token",
+        fetchImpl,
+        timeoutMs,
+        newRequestId: () => "test-request-id",
+      });
+    }
+
+    it("A. a normal response completing before the deadline still succeeds", async () => {
+      const fetchImpl = vi.fn(async () => jsonResponse({ id: "USR-000001" }));
+      const result = await newTimeoutClient(fetchImpl as unknown as typeof fetch, 50).request("/api/v1/me");
+      expect(result).toEqual({ id: "USR-000001" });
+    });
+
+    it("B. a request exceeding the deadline produces a distinguishable timeout ApiError, not RequestCancelled", async () => {
+      const fetchImpl = vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            if (init.signal?.aborted) {
+            reject(new DOMException("aborted", "AbortError"));
+            return;
+          }
+          init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+          }),
+      );
+
+      const error = await newTimeoutClient(fetchImpl as unknown as typeof fetch, 10)
+        .request("/api/v1/me")
+        .catch((cause: unknown) => cause);
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error).not.toBeInstanceOf(RequestCancelled);
+      expect((error as ApiError).isTimeout).toBe(true);
+    });
+
+    it("C. caller-initiated abort still wins over an eventual timeout and stays RequestCancelled", async () => {
+      const controller = new AbortController();
+      const fetchImpl = vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            if (init.signal?.aborted) {
+            reject(new DOMException("aborted", "AbortError"));
+            return;
+          }
+          init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+          }),
+      );
+
+      const pending = newTimeoutClient(fetchImpl as unknown as typeof fetch, 10_000).request("/api/v1/me", {
+        signal: controller.signal,
+      });
+      controller.abort();
+      const error = await pending.catch((cause: unknown) => cause);
+
+      expect(error).toBeInstanceOf(RequestCancelled);
+    });
+
+    // The bug this test guards against: the timeout callback fires first and
+    // aborts the shared internal AbortController; shortly after, the caller
+    // *also* aborts its own signal (e.g. an unrelated unmount racing with an
+    // already-expired deadline). Before the correction, `callerCancelled`
+    // was checked unconditionally in the catch block, so this sequence was
+    // misclassified as RequestCancelled even though the timeout genuinely
+    // fired first. Fake timers make the firing order explicit and
+    // reproducible rather than relying on real-clock timing.
+    it("D. a timeout that fires before a later caller abort is classified as a timeout, not a cancellation (first cause wins)", async () => {
+      vi.useFakeTimers();
+      try {
+        const controller = new AbortController();
+        const fetchImpl = vi.fn(
+          (_url: string, init: RequestInit) =>
+            new Promise<Response>((_resolve, reject) => {
+              if (init.signal?.aborted) {
+                reject(new DOMException("aborted", "AbortError"));
+                return;
+              }
+              init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+            }),
+        );
+
+        // .catch is chained in the same synchronous tick the promise is
+        // created, so the rejection this test deliberately provokes is never
+        // briefly unhandled while timers are advanced below.
+        const pending = newTimeoutClient(fetchImpl as unknown as typeof fetch, 10)
+          .request("/api/v1/me", { signal: controller.signal })
+          .catch((cause: unknown) => cause);
+
+        // The deadline fires first...
+        await vi.advanceTimersByTimeAsync(10);
+        // ...and only afterward does the caller also abort.
+        controller.abort();
+
+        const error = await pending;
+
+        expect(error).toBeInstanceOf(ApiError);
+        expect(error).not.toBeInstanceOf(RequestCancelled);
+        expect((error as ApiError).isTimeout).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it("sends a JSON body with the right content type", async () => {

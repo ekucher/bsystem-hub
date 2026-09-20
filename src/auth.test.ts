@@ -91,6 +91,30 @@ describe("the OIDC client configuration", () => {
   });
 });
 
+describe("clearUser (REM-17)", () => {
+  // Distinct from logout(): a rejected token must be removed locally
+  // without redirecting to authentik, since there is nothing wrong with the
+  // authentik session itself — only the token the HUB was holding.
+  it("removes the stored user without redirecting", async () => {
+    const removeUser = vi.fn().mockResolvedValue(undefined);
+    const signoutRedirect = vi.fn();
+    UserManager.mockImplementationOnce(function UserManagerStub() {
+      return { removeUser, signoutRedirect };
+    });
+
+    const auth = await loadAuth(CONFIGURED);
+    await auth.clearUser();
+
+    expect(removeUser).toHaveBeenCalledTimes(1);
+    expect(signoutRedirect).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when OIDC is not configured, rather than throwing", async () => {
+    const auth = await loadAuth({ VITE_OIDC_AUTHORITY: undefined, VITE_OIDC_CLIENT_ID: undefined });
+    await expect(auth.clearUser()).resolves.toBeUndefined();
+  });
+});
+
 describe("a deployment with no OIDC settings", () => {
   it("is reported as unconfigured rather than half-configured", async () => {
     const auth = await loadAuth({ VITE_OIDC_AUTHORITY: undefined, VITE_OIDC_CLIENT_ID: undefined });

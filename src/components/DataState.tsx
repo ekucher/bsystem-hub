@@ -17,12 +17,19 @@ export function DataState<T>({
   children,
   empty,
   isEmpty,
+  onRetry,
 }: {
   state: ResourceState<T>;
   children: (data: T) => ReactNode;
   /** Shown when the request succeeded but there is nothing to display. */
   empty?: ReactNode;
   isEmpty?: (data: T) => boolean;
+  /**
+   * Reloads the resource (typically `useResource`'s own `reload`). Offered
+   * to the reader only when the error is one retrying can plausibly fix —
+   * see `ApiError.isRetryable` (REM-7).
+   */
+  onRetry?: () => void;
 }) {
   if (state.status === "loading") {
     return (
@@ -33,7 +40,7 @@ export function DataState<T>({
   }
 
   if (state.status === "error") {
-    return <ErrorState error={state.error} />;
+    return <ErrorState error={state.error} onRetry={onRetry} />;
   }
 
   if (isEmpty?.(state.data)) {
@@ -43,7 +50,8 @@ export function DataState<T>({
   return <>{children(state.data)}</>;
 }
 
-export function ErrorState({ error }: { error: ApiError }) {
+export function ErrorState({ error, onRetry }: { error: ApiError; onRetry?: () => void }) {
+  const canRetry = Boolean(onRetry) && error.isRetryable;
   return (
     <div className="state state-error" role="alert">
       <h2>{title(error)}</h2>
@@ -53,6 +61,11 @@ export function ErrorState({ error }: { error: ApiError }) {
         <p className="muted">
           Ідентифікатор запиту: <code>{error.requestId}</code>
         </p>
+      )}
+      {canRetry && (
+        <button type="button" className="secondary" onClick={onRetry}>
+          Спробувати ще раз
+        </button>
       )}
     </div>
   );

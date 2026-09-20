@@ -73,6 +73,31 @@ export class ApiError extends Error {
   get isCapabilityUnsupported(): boolean {
     return this.code === "capability_unsupported";
   }
+
+  /**
+   * The client gave up waiting for a response (REM-5A) — distinct from a
+   * general connection failure (`status === 0` with no code): here the
+   * request was sent and simply took too long, not refused or unreachable.
+   */
+  get isTimeout(): boolean {
+    return this.code === "client_timeout";
+  }
+
+  /**
+   * Whether retrying the same request has a real chance of succeeding
+   * (REM-7). `isForbidden`/`isNotFound`/`isUnauthenticated` describe the
+   * caller or the resource, not a transient condition — retrying changes
+   * nothing. `isNotConfigured`/`isCapabilityUnsupported` are a deployment's
+   * supported shape, not a fault (see DataState's own docs) — also not
+   * something a retry fixes. A connection failure or timeout (`status ===
+   * 0`), `isUpstream` (502), and an otherwise-unexplained `isUnavailable`
+   * (503) are the failure modes retrying can plausibly resolve.
+   */
+  get isRetryable(): boolean {
+    if (this.isForbidden || this.isNotFound || this.isUnauthenticated) return false;
+    if (this.isNotConfigured || this.isCapabilityUnsupported) return false;
+    return this.status === 0 || this.isUpstream || this.isUnavailable;
+  }
 }
 
 /** Raised when a request is abandoned because the caller navigated away. */
@@ -91,14 +116,21 @@ export type ApiClientOptions = {
   /**
    * Called when the platform rejects the token. The HUB uses it to end the
    * local session rather than leaving the user on a page that cannot load.
+   *
+   * May return a Promise (REM-17 correction): `request()` awaits it before
+   * settling, so a caller that awaits the request is guaranteed the session
+   * has actually finished ending — including removing the rejected OIDC
+   * user from storage — not merely that ending was scheduled.
    */
-  onUnauthenticated?: () => void;
+  onUnauthenticated?: () => void | Promise<void>;
   /** Overridable for tests. */
   fetchImpl?: typeof fetch;
   /** Overridable for tests; production uses a random UUID per request. */
   newRequestId?: () => string;
   /** Base URL, for a HUB served from a different origin than the API. */
   baseUrl?: string;
+  /** Overridable for tests; production uses DEFAULT_REQUEST_TIMEOUT_MS. */
+  timeoutMs?: number;
 };
 
 export type RequestOptions = {
@@ -107,6 +139,19 @@ export type RequestOptions = {
   method?: string;
   body?: unknown;
 };
+
+/**
+ * How long a request may run before the client gives up (REM-5A).
+ *
+ * Chosen relative to nginx's explicit upstream timeout policy (REM-5B,
+ * nginx.conf's `/api/` location: `proxy_connect_timeout 5s;
+ * proxy_read_timeout 25s;`): the client times out at 20s, five seconds
+ * before nginx's own 25s read timeout would fire. That ordering is
+ * deliberate — the user sees the HUB's own "timed out" message
+ * (distinguishable via `ApiError.isTimeout`) instead of a generic upstream
+ * gateway error reaching the browser first.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
 
 function defaultRequestId(): string {
   // crypto.randomUUID is unavailable over plain HTTP in some browsers, so a
@@ -142,20 +187,69 @@ export class ApiClient {
     if (token) headers.set("Authorization", `Bearer ${token}`);
     if (options.body !== undefined) headers.set("Content-Type", "application/json");
 
+    // A caller-supplied AbortSignal (user navigation, unmount) must keep
+    // producing RequestCancelled. A client-side deadline (REM-5A) must
+    // produce a distinguishable timeout ApiError instead — the two share one
+    // underlying AbortController (fetch only accepts one signal), so which
+    // one actually fired must be tracked explicitly rather than inferred
+    // from the signal or the thrown error's type alone.
+    //
+    // Correction: this used to be two independent booleans (`timedOut`,
+    // `callerCancelled`) that could both end up `true` if the caller aborted
+    // shortly after the timeout already fired — the catch block then always
+    // treated a caller abort as taking priority, regardless of which cause
+    // actually fired first. `abortCause` is written at most once (the
+    // callback that runs first "wins," and JS's single-threaded event loop
+    // makes that first write unambiguous — there is no true data race, only
+    // an event-ordering one), so classification below reflects whichever
+    // cause actually occurred first, not the order the checks happen to run in.
+    const controller = new AbortController();
+    let abortCause: "caller" | "timeout" | null = null;
+
+    const onCallerAbort = () => {
+      if (abortCause === null) abortCause = "caller";
+      controller.abort();
+    };
+    if (options.signal) {
+      if (options.signal.aborted) onCallerAbort();
+      else options.signal.addEventListener("abort", onCallerAbort);
+    }
+
+    const timeoutMs = this.options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    const timeoutId = setTimeout(() => {
+      if (abortCause === null) abortCause = "timeout";
+      controller.abort();
+    }, timeoutMs);
+
     let response: Response;
     try {
       response = await doFetch(this.url(path, options.query), {
         method: options.method ?? "GET",
         headers,
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
-        signal: options.signal,
+        signal: controller.signal,
       });
-    } catch (cause) {
-      // An aborted request is not a failure to report: the user moved on.
-      if (options.signal?.aborted || (cause instanceof DOMException && cause.name === "AbortError")) {
+    } catch {
+      // Classification is driven entirely by which cause won `abortCause`
+      // above, never by inspecting the thrown error's type — that value can
+      // be an AbortError for either cause (or something else entirely for a
+      // genuine network failure), and re-deriving the cause from it is
+      // exactly the ambiguity this correction removes.
+      if (abortCause === "caller") {
         throw new RequestCancelled();
       }
+      if (abortCause === "timeout") {
+        throw new ApiError({
+          status: 0,
+          message: "Час очікування відповіді Integration Core вичерпано",
+          code: "client_timeout",
+          requestId,
+        });
+      }
       throw new ApiError({ status: 0, message: "Не вдалося зв'язатися з Integration Core", requestId });
+    } finally {
+      clearTimeout(timeoutId);
+      options.signal?.removeEventListener("abort", onCallerAbort);
     }
 
     if (response.ok) {
@@ -164,7 +258,7 @@ export class ApiClient {
     }
 
     const error = await this.parseError(response, requestId);
-    if (error.isUnauthenticated) this.options.onUnauthenticated?.();
+    if (error.isUnauthenticated) await this.options.onUnauthenticated?.();
     throw error;
   }
 

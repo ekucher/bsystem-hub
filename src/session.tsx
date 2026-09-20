@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiClient } from "./api/client";
 import type { Me } from "./api/types";
-import { completeLogin, getUser, login, logout, oidcConfigured } from "./auth";
+import { clearUser, completeLogin, getUser, login, logout, oidcConfigured } from "./auth";
 
 /** Where the session is in its lifecycle. */
 export type SessionStatus = "loading" | "anonymous" | "authenticated" | "error";
@@ -46,16 +46,38 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Tracks an in-flight "end the session" attempt so concurrent 401s from
+  // several simultaneously in-flight requests share one clearUser() call and
+  // one deterministic completion, rather than each racing its own (REM-17
+  // correction, item 1 concurrency requirement).
+  const endingSessionRef = useRef<Promise<void> | null>(null);
+
   const api = useMemo(
     () =>
       new ApiClient({
         getToken: async () => (await getUser())?.access_token ?? null,
         // A rejected token means the stored session is no longer usable.
-        // Clearing it locally puts the user back on the sign-in screen rather
-        // than on a page that can never load.
+        // REM-17 correction: removing the stored OIDC user is now a
+        // deterministic, awaited part of ending the session, not a
+        // fire-and-forget side effect — ApiClient.request() awaits this
+        // callback before its own promise settles, so a caller that awaits a
+        // 401'd request is guaranteed the rejected credential has already
+        // been removed by the time it observes the failure, and the
+        // in-memory session has already flipped to anonymous. Deliberately
+        // not logout()/SLO — see auth.ts's clearUser().
         onUnauthenticated: () => {
-          setMe(null);
-          setStatus("anonymous");
+          if (!endingSessionRef.current) {
+            endingSessionRef.current = (async () => {
+              try {
+                await clearUser();
+              } finally {
+                setMe(null);
+                setStatus("anonymous");
+                endingSessionRef.current = null;
+              }
+            })();
+          }
+          return endingSessionRef.current;
         },
       }),
     [],

@@ -33,9 +33,26 @@ function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : "Невідома помилка";
 }
 
+/**
+ * REM-8: `roles` is a required field in the API contract (HumanAccount.roles:
+ * HumanRole[]), but a TS type is a compile-time promise only — the runtime
+ * value is whatever the response actually contains. A `null`/missing/
+ * non-array `roles` is safely defaulted to "no roles" everywhere it is read
+ * in this file, the same as a genuinely empty array; it is not treated as a
+ * full-page fault, since one account's malformed field does not make the
+ * rest of the directory unusable. An unrecognized role value within an
+ * otherwise-valid array (handled in `roleLabel` via `ROLE_LABELS[role] ??
+ * role`) is shown as-is rather than hidden, since that is more likely a new
+ * role name than corrupted data.
+ */
+function safeRoles(account: HumanAccount): HumanRole[] {
+  return Array.isArray(account.roles) ? account.roles : [];
+}
+
 function roleLabel(account: HumanAccount): string {
-  if (account.roles.length === 0) return "—";
-  return account.roles.map((role) => ROLE_LABELS[role] ?? role).join(", ");
+  const roles = safeRoles(account);
+  if (roles.length === 0) return "—";
+  return roles.map((role) => ROLE_LABELS[role] ?? role).join(", ");
 }
 
 function statusLabel(account: HumanAccount): string {
@@ -170,13 +187,13 @@ function AccountActions({
 }) {
   const { api } = useSession();
   const [email, setEmail] = useState(account.email);
-  const [role, setRole] = useState<HumanRole>(account.roles[0] ?? "customer");
+  const [role, setRole] = useState<HumanRole>(safeRoles(account)[0] ?? "customer");
   const [password, setPassword] = useState("");
   const [passwordAgain, setPasswordAgain] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const adminTarget = account.roles.includes("admin");
+  const adminTarget = safeRoles(account).includes("admin");
   const canMutateTarget = account.manageable && (!adminTarget || canAdmin);
   const roleOptions = HUMAN_ROLES.filter((candidate) => canAdmin || candidate !== "admin");
 
@@ -312,6 +329,7 @@ export function Users() {
       </p>
       <DataState
         state={state}
+        onRetry={state.reload}
         isEmpty={(value) => value.accounts.length === 0}
         empty={<p>Користувачів ще немає.</p>}
       >

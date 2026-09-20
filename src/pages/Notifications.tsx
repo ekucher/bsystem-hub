@@ -80,6 +80,7 @@ export function Notifications() {
 
       <DataState
         state={state}
+        onRetry={state.reload}
         isEmpty={(data) => data.data.length === 0}
         empty={<p>{unreadOnly ? "Непрочитаних сповіщень немає." : "Сповіщень немає."}</p>}
       >

@@ -174,6 +174,26 @@ describe("authorization in the interface", () => {
     expect(cells[5]).toHaveTextContent("Активний");
   });
 
+  // REM-8: a malformed/null `roles` field on one account must not crash the
+  // whole directory — the API contract promises HumanRole[], but a runtime
+  // response is not guaranteed to keep that promise.
+  it("does not crash the user directory when an account's roles field is null", async () => {
+    const malformedAccounts = {
+      management_available: true,
+      accounts: [{ ...ACCOUNTS.accounts[0], roles: null as unknown as string[] }],
+    };
+    renderWithSession(<AppRoutes />, {
+      fetchImpl: platform({ "/api/v1/admin/accounts": { body: malformedAccounts } }),
+      route: "/admin/users",
+    });
+
+    const table = await screen.findByRole("table", { name: "Користувачі BSYSTEM та їхні Global ID" });
+    const row = within(table).getByText("Platform Administrator").closest("tr");
+    expect(row).not.toBeNull();
+    const cells = (row as HTMLTableRowElement).querySelectorAll("td");
+    expect(cells[4]).toHaveTextContent("—");
+  });
+
   it("creates a human account without putting the password in the URL", async () => {
     const calls: { url: string; method: string; body?: string }[] = [];
     const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -134,6 +134,16 @@ Example:
 }
 ```
 
+**Current implementation status for bsystem-hub:** this repository is a
+static frontend served by nginx with no application server, so it cannot
+produce the JSON body above. Its nginx layer instead exposes a plain
+liveness check at `GET /healthz` (see [nginx.conf](../nginx.conf) and
+[ARCHITECTURE.md](ARCHITECTURE.md)), used by the container's own
+`HEALTHCHECK`. Bringing this repository's route in line with the contract
+above — either by adding `/health` alongside `/healthz`, or by documenting
+`/healthz` as the accepted liveness path for a static-frontend service — is
+an open decision, not yet made.
+
 ## Definition of Done
 
 P0 is complete when:

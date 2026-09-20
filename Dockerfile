@@ -1,7 +1,11 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+# REM-27: npm ci installs exactly what package-lock.json resolved and fails
+# if the manifest and lockfile disagree, instead of npm install's looser
+# best-effort resolution — the build is only as reproducible as its install
+# step.
+RUN npm ci --no-audit --no-fund
 COPY . .
 ARG VITE_OIDC_AUTHORITY
 ARG VITE_OIDC_CLIENT_ID

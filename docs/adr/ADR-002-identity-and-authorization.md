@@ -1,7 +1,14 @@
 # ADR-002: Identity and Authorization Separation
 
-- Status: Accepted
+- Status: Accepted, partially superseded by [ADR-005](ADR-005-central-sso-and-direct-module-access.md)
 - Date: 2026-09-15
+
+**The "BSYSTEM-HUB responsibilities" section below assigning HUB "permissions,
+resource scopes, module visibility, authorization administration" is
+superseded.** ADR-005 (2026-09-19) reassigns platform authorization to
+Integration Core; see [RBAC.md](../RBAC.md) for the corrected, current model
+and why the earlier assignment changed. This record is kept as originally
+written rather than edited, so the history of the decision remains legible.
 
 ## Decision
 

@@ -36,3 +36,21 @@ export async function logout(): Promise<void> {
   if (!userManager) return;
   await userManager.signoutRedirect();
 }
+
+/**
+ * Removes the locally stored OIDC user without a redirect (REM-17).
+ *
+ * Used when the platform has already rejected the token: the stored
+ * credential is dead, so clearing app-level state alone (session.tsx's
+ * `onUnauthenticated`) is not enough — without this, a reload's bootstrap
+ * would find the same rejected user still in sessionStorage and hand it to
+ * `/api/v1/me` again, failing the same way. This is not `logout()`: it does
+ * not redirect to authentik and is not SLO, so a still-live authentik
+ * browser session is left untouched — the user simply has to sign in again
+ * through this app, deterministically, rather than silently retry a
+ * credential the platform has already refused.
+ */
+export async function clearUser(): Promise<void> {
+  if (!userManager) return;
+  await userManager.removeUser();
+}
