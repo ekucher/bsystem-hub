@@ -65,7 +65,12 @@ export function Dashboard() {
         <p>Доступ формується з груп authentik та RBAC-політик BSYSTEM.</p>
         <div className="identity-row">
           {me?.id && <span className="status">{me.id}</span>}
-          {me?.roles.map((role) => (
+          {/* F-01: /api/v1/me's contract promises roles: string[], but a
+              runtime response is not guaranteed to keep that promise —
+              matches the Array.isArray guard Users.tsx already uses for the
+              same class of field. Malformed data degrades to zero displayed
+              roles, never to a default/invented one. */}
+          {(Array.isArray(me?.roles) ? me.roles : []).map((role) => (
             <span className="status role" key={role}>
               {role}
             </span>

@@ -37,11 +37,17 @@ export function Profile() {
   );
 }
 
+// F-01: /api/v1/me's contract promises groups/roles/permissions: string[],
+// but a runtime response is not guaranteed to keep that promise — matches
+// the Array.isArray guard Users.tsx already uses for the same class of
+// field. Malformed data degrades to the empty state, never to a
+// default/invented value.
 function TagList({ values, empty }: { values: string[]; empty: string }) {
-  if (values.length === 0) return <p className="muted">{empty}</p>;
+  const safeValues = Array.isArray(values) ? values : [];
+  if (safeValues.length === 0) return <p className="muted">{empty}</p>;
   return (
     <ul className="tag-list" role="list">
-      {values.map((value) => (
+      {safeValues.map((value) => (
         <li key={value}>
           <span className="status">{value}</span>
         </li>
