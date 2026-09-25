@@ -320,6 +320,30 @@ main { padding: 0 32px 48px; }
   grid-column: 1 / -1;
 }
 
+.role-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  grid-column: 1 / -1;
+  border: 1px solid #b9c8da;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.role-checkboxes legend {
+  font-size: .9rem;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .85rem;
+  font-weight: 400;
+}
+
 .account-actions {
   min-width: 230px;
   margin: 0;

@@ -35,6 +35,23 @@ const ACCOUNTS = {
   ],
 };
 
+const ADMIN_MODULES = [
+  {
+    id: "crm",
+    name: "CRM",
+    description: "Клієнти",
+    status: "active",
+    launch_url: "https://crm.bsystem.example.invalid",
+    allowed_roles: ["admin", "manager"],
+    updated_by: "admin",
+    updated_at: "2026-09-20T10:00:00Z",
+  },
+];
+
+const ALLOWED_ORIGINS = {
+  origins: ["https://crm.bsystem.example.invalid", "https://redmine.bsystem.example.invalid"],
+};
+
 const NOTIFICATIONS = {
   data: [
     {
@@ -71,6 +88,8 @@ function platform(overrides: Record<string, { status?: number; body: unknown }> 
     "/api/v1/notifications": { body: NOTIFICATIONS },
     "/api/v1/modules": { body: MODULES },
     "/api/v1/admin/accounts": { body: ACCOUNTS },
+    "/api/v1/admin/modules": { body: ADMIN_MODULES },
+    "/api/v1/admin/modules/allowed-origins": { body: ALLOWED_ORIGINS },
     "/api/v1/clients": { body: CLIENTS },
     "/api/v1/projects": { body: { data: [], pagination: { total: 0, limit: 0 } } },
     "/api/v1/issues": { body: { data: [], pagination: { total: 0, limit: 0 } } },
@@ -97,6 +116,7 @@ describe("routing", () => {
     { route: "/documents", heading: "Документи" },
     { route: "/notifications", heading: "Сповіщення" },
     { route: "/admin/users", heading: "Користувачі" },
+    { route: "/admin/modules", heading: "Модулі" },
     { route: "/403", heading: "Немає доступу" },
     { route: "/404", heading: "Сторінку не знайдено" },
   ])("serves $route", async ({ route, heading }) => {
@@ -148,7 +168,7 @@ describe("authorization in the interface", () => {
     const nav = await screen.findByRole("navigation", { name: "Основна навігація" });
     expect(within(nav).getByRole("link", { name: "Огляд" })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Профіль" })).toBeInTheDocument();
-    for (const hidden of ["Клієнти", "Проєкти", "Задачі", "Документи", "Користувачі"]) {
+    for (const hidden of ["Клієнти", "Проєкти", "Задачі", "Документи", "Користувачі", "Модулі"]) {
       expect(within(nav).queryByRole("link", { name: hidden })).not.toBeInTheDocument();
     }
   });
@@ -291,6 +311,243 @@ describe("authorization in the interface", () => {
     expect(await scope.findByText("Збережено.")).toBeInTheDocument();
   });
 
+  it("guards the module catalog with the platform permission", async () => {
+    renderWithSession(<AppRoutes />, { fetchImpl: platform(), me: UNMAPPED, route: "/admin/modules" });
+    expect(await screen.findByRole("heading", { level: 1, name: "Немає доступу" })).toBeInTheDocument();
+  });
+
+  it("renders the module catalog with status and allowed roles", async () => {
+    renderWithSession(<AppRoutes />, { fetchImpl: platform(), route: "/admin/modules" });
+    const table = await screen.findByRole("table", { name: "Каталог модулів BSYSTEM" });
+    const row = within(table).getByText("CRM").closest("tr");
+    expect(row).not.toBeNull();
+    const cells = (row as HTMLTableRowElement).querySelectorAll("td");
+    expect(cells[0]).toHaveTextContent("CRM");
+    expect(cells[1]).toHaveTextContent("crm");
+    expect(cells[2]).toHaveTextContent("Активний");
+    expect(cells[3]).toHaveTextContent("Адміністратор, Менеджер");
+  });
+
+  it("creates a module as disabled and lets the admin pick only an allowed origin", async () => {
+    const calls: { url: string; method: string; body?: string }[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = init?.method ?? "GET";
+      const body = typeof init?.body === "string" ? init.body : undefined;
+      calls.push({ url, method, body });
+
+      if (url.includes("/api/v1/notifications")) {
+        return new Response(JSON.stringify(NOTIFICATIONS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/v1/admin/modules/allowed-origins")) {
+        return new Response(JSON.stringify(ALLOWED_ORIGINS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/v1/admin/modules") && method === "POST") {
+        return new Response(JSON.stringify({ ...ADMIN_MODULES[0], id: "outline", status: "disabled" }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("/api/v1/admin/modules")) {
+        return new Response(JSON.stringify(ADMIN_MODULES), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: "not stubbed" }), { status: 404, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+
+    renderWithSession(<AppRoutes />, { fetchImpl, route: "/admin/modules" });
+    const createSummary = await screen.findByText("+ Додати додаток");
+    await userEvent.click(createSummary);
+    // Scoped to the create panel: once a module row exists, its own "Керувати"
+    // panel (ModuleActions) renders a same-labelled "Назва" field for editing,
+    // so an unscoped getByLabelText("Назва") would match both.
+    const createPanel = createSummary.closest("details");
+    expect(createPanel).not.toBeNull();
+    const form = within(createPanel as HTMLDetailsElement);
+    const nameInput = form.getByLabelText("Назва");
+    await userEvent.type(nameInput, "Outline");
+    expect(form.getByLabelText("Ідентифікатор")).toHaveValue("outline");
+    await userEvent.type(form.getByLabelText("Опис"), "База знань");
+    await userEvent.selectOptions(form.getByLabelText("Джерело (canonical origin)"), "https://redmine.bsystem.example.invalid");
+    await userEvent.click(form.getByLabelText("Адміністратор"));
+    await userEvent.click(form.getByRole("button", { name: "Створити" }));
+
+    await waitFor(() => expect(calls.some((call) => call.method === "POST")).toBe(true));
+    const create = calls.find((call) => call.method === "POST" && call.url.includes("/api/v1/admin/modules"));
+    expect(create?.body).toContain('"status":"disabled"');
+    // Trailing slash: buildLaunchUrl now routes every candidate back through
+    // safeModuleLaunchUrl (one safety boundary, not two), and URL.toString()
+    // normalizes a bare origin with an explicit "/".
+    expect(create?.body).toContain('"launch_url":"https://redmine.bsystem.example.invalid/"');
+    expect(create?.body).toContain('"allowed_roles":["admin"]');
+    expect(await screen.findByText(/Додаток створено як вимкнений/)).toBeInTheDocument();
+  });
+
+  it("changes a module's status through the admin API", async () => {
+    const calls: { url: string; method: string; body?: string }[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = init?.method ?? "GET";
+      const body = typeof init?.body === "string" ? init.body : undefined;
+      calls.push({ url, method, body });
+
+      if (url.includes("/api/v1/notifications")) {
+        return new Response(JSON.stringify(NOTIFICATIONS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/v1/admin/modules/allowed-origins")) {
+        return new Response(JSON.stringify(ALLOWED_ORIGINS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.endsWith("/api/v1/admin/modules/crm") && method === "PATCH") {
+        return new Response(JSON.stringify({ ...ADMIN_MODULES[0], status: "maintenance" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.includes("/api/v1/admin/modules")) {
+        return new Response(JSON.stringify(ADMIN_MODULES), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: "not stubbed" }), { status: 404, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+
+    renderWithSession(<AppRoutes />, { fetchImpl, route: "/admin/modules" });
+    const manage = await screen.findByText("Керувати");
+    await userEvent.click(manage);
+
+    const actions = manage.closest("details");
+    expect(actions).not.toBeNull();
+    const scope = within(actions as HTMLDetailsElement);
+    await userEvent.selectOptions(scope.getByLabelText("Статус"), "maintenance");
+    await userEvent.click(scope.getByRole("button", { name: "Зберегти статус" }));
+
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (call) =>
+            call.method === "PATCH" &&
+            call.url.endsWith("/api/v1/admin/modules/crm") &&
+            call.body === '{"status":"maintenance"}',
+        ),
+      ).toBe(true),
+    );
+    expect(await scope.findByText("Збережено.")).toBeInTheDocument();
+  });
+
+  // The full admin lifecycle the spec describes: create -> assign roles ->
+  // configure launch data -> activate -> visible through the launcher's own
+  // API. `stored` behaves like a real backend record — POST creates it,
+  // each PATCH merges into it — so the assertions below are checking the
+  // same request/response path the launcher itself depends on
+  // (/api/v1/modules), not just component-local React state.
+  it("create → assign roles → configure launch data → activate → the module becomes launcher-visible for an authorized role, and stays hidden otherwise", async () => {
+    let stored: Record<string, unknown> | null = null;
+    const calls: { url: string; method: string; body?: string }[] = [];
+
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = init?.method ?? "GET";
+      const body = typeof init?.body === "string" ? init.body : undefined;
+      calls.push({ url, method, body });
+
+      if (url.includes("/api/v1/notifications")) {
+        return new Response(JSON.stringify(NOTIFICATIONS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/v1/admin/modules/allowed-origins")) {
+        return new Response(JSON.stringify(ALLOWED_ORIGINS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.endsWith("/api/v1/admin/modules") && method === "POST") {
+        stored = {
+          id: "outline",
+          updated_by: "admin",
+          updated_at: "2026-09-25T10:00:00Z",
+          ...JSON.parse(body as string),
+        };
+        return new Response(JSON.stringify(stored), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.endsWith("/api/v1/admin/modules/outline") && method === "PATCH") {
+        stored = { ...stored, ...JSON.parse(body as string) };
+        return new Response(JSON.stringify(stored), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.endsWith("/api/v1/admin/modules")) {
+        return new Response(JSON.stringify(stored ? [stored] : []), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: "not stubbed" }), { status: 404, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+
+    const adminRender = renderWithSession(<AppRoutes />, { fetchImpl, route: "/admin/modules" });
+
+    // 1. create — always disabled, no roles, no launch data yet.
+    const createSummary = await screen.findByText("+ Додати додаток");
+    await userEvent.click(createSummary);
+    const createPanel = within(createSummary.closest("details") as HTMLDetailsElement);
+    await userEvent.type(createPanel.getByLabelText("Назва"), "Outline");
+    await userEvent.type(createPanel.getByLabelText("Опис"), "База знань");
+    await userEvent.click(createPanel.getByRole("button", { name: "Створити" }));
+    await waitFor(() => expect(stored).not.toBeNull());
+    expect(stored).toMatchObject({ status: "disabled", allowed_roles: [] });
+
+    // 2. assign allowed roles, through the manage panel of the row just created.
+    const manage = await screen.findByText("Керувати");
+    await userEvent.click(manage);
+    const manageScope = within(manage.closest("details") as HTMLDetailsElement);
+    await userEvent.click(manageScope.getByLabelText("Адміністратор"));
+    await userEvent.click(manageScope.getByRole("button", { name: "Зберегти ролі" }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === "PATCH" && c.body === '{"allowed_roles":["admin"]}')).toBe(true),
+    );
+    expect(stored).toMatchObject({ allowed_roles: ["admin"] });
+
+    // 3. configure the required launch data — a canonical origin + path.
+    await userEvent.selectOptions(
+      manageScope.getByLabelText("Джерело (canonical origin)"),
+      "https://redmine.bsystem.example.invalid",
+    );
+    await userEvent.type(manageScope.getByPlaceholderText("issues/42"), "kb");
+    await userEvent.click(manageScope.getByRole("button", { name: "Зберегти посилання" }));
+    await waitFor(() =>
+      expect(
+        calls.some(
+          (c) => c.method === "PATCH" && c.body === '{"launch_url":"https://redmine.bsystem.example.invalid/kb"}',
+        ),
+      ).toBe(true),
+    );
+
+    // 4. activate — allowed now, since roles were assigned in step 2.
+    await userEvent.selectOptions(manageScope.getByLabelText("Статус"), "active");
+    await userEvent.click(manageScope.getByRole("button", { name: "Зберегти статус" }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === "PATCH" && c.body === '{"status":"active"}')).toBe(true),
+    );
+    expect(stored).toMatchObject({
+      status: "active",
+      allowed_roles: ["admin"],
+      launch_url: "https://redmine.bsystem.example.invalid/kb",
+    });
+
+    // Admin page's own job is done — unmount before rendering the launcher
+    // views below, so each render's assertions see only its own DOM rather
+    // than accumulating across renders within this one test (RTL only
+    // auto-cleans up between tests, not between renders within one).
+    adminRender.unmount();
+
+    // 5. the launcher's own endpoint, for a role the platform grants this to.
+    const authorizedModules = stored as unknown as Record<string, unknown>;
+    const authorizedRender = renderWithSession(<AppRoutes />, {
+      fetchImpl: platform({ "/api/v1/modules": { body: [authorizedModules] } }),
+      route: "/",
+    });
+    expect(await screen.findByRole("heading", { level: 3, name: "Outline" })).toBeInTheDocument();
+    authorizedRender.unmount();
+
+    // 6. the same endpoint, for a role the platform does not grant this to —
+    // Integration Core would simply omit it from the collection; the HUB
+    // renders exactly what it was given, nothing locally reconstructed.
+    renderWithSession(<AppRoutes />, {
+      fetchImpl: platform({ "/api/v1/modules": { body: [] } }),
+      route: "/",
+    });
+    expect(await screen.findByRole("heading", { level: 3, name: "Немає доступних модулів" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 3, name: "Outline" })).not.toBeInTheDocument();
+  });
+
   it("tells an unmapped user why they see no modules", async () => {
     renderWithSession(<AppRoutes />, { fetchImpl: platform({ "/api/v1/modules": { body: [] } }), me: UNMAPPED });
     expect(await screen.findByRole("heading", { level: 3, name: "Немає доступних модулів" })).toBeInTheDocument();
@@ -383,6 +640,7 @@ describe("accessibility", () => {
     { route: "/projects", name: "empty projects" },
     { route: "/notifications", name: "notifications" },
     { route: "/admin/users", name: "user directory" },
+    { route: "/admin/modules", name: "module catalog" },
     { route: "/403", name: "forbidden" },
     { route: "/404", name: "not found" },
   ])("has no automated violations on the $name page", async ({ route }) => {

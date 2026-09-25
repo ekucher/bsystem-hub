@@ -18,13 +18,43 @@ export type Me = {
   modules: string[];
 };
 
+export type ModuleStatus = "active" | "maintenance" | "disabled";
+
 export type Module = {
   id: string;
   name: string;
   description: string;
-  status: string;
+  status: ModuleStatus;
   launch_url?: string;
   icon?: string;
+  /**
+   * Roles the launcher shows this module to. Required, not optional: the
+   * admin contract (spec) always sends this field, even as an empty array
+   * for a module nobody can see yet — "no roles assigned" is a real,
+   * representable state, not the absence of the field. A response that
+   * violates this promise at runtime is still handled defensively
+   * (`safeAllowedRoles` in Modules.tsx, the same REM-8 pattern
+   * `HumanAccount.roles` gets in Users.tsx) — the type says what the
+   * contract guarantees, not what a malformed response might do.
+   */
+  allowed_roles: HumanRole[];
+  updated_by?: string;
+  updated_at?: string;
+};
+
+/**
+ * A canonical platform origin (ADR-006) — e.g. `https://redmine.internal`.
+ * Never a full URL with a path, never something an operator typed freely.
+ */
+export type LaunchOrigin = string;
+
+/**
+ * Canonical origins module.launch_url may point at (ADR-006). The admin form
+ * offers only these, so an operator cannot even attempt to register an
+ * untrusted origin — the Integration Core enforces the same list server-side.
+ */
+export type ModuleAllowedOrigins = {
+  origins: LaunchOrigin[];
 };
 
 /** A human identity persisted by Integration Core after first authentication. */
