@@ -4,14 +4,15 @@ import { DataState } from "../components/DataState";
 import { safeModuleLaunchUrl } from "../lib/moduleLaunchUrl";
 import type { Module } from "../api/types";
 
-const moduleIcons: Record<string, string> = {
-  redmine: "R",
-  outline: "O",
-  crm: "C",
-};
-
+/**
+ * The launcher used to key off a hardcoded id->letter table here, which meant
+ * a module added through /admin/modules had no icon until this file was
+ * edited. Every module now falls back to its own first letter instead, so
+ * the catalog is fully data-driven — `icon` stays reserved on the type for a
+ * future icon library, but nothing here depends on it.
+ */
 function ModuleIcon({ item }: { item: Module }) {
-  const label = moduleIcons[item.icon ?? ""] ?? item.name.trim().charAt(0).toUpperCase() ?? "•";
+  const label = item.name.trim().charAt(0).toUpperCase() || "•";
   return (
     <span className="module-icon" aria-hidden="true">
       {label}
@@ -65,7 +66,12 @@ export function Dashboard() {
         <p>Доступ формується з груп authentik та RBAC-політик BSYSTEM.</p>
         <div className="identity-row">
           {me?.id && <span className="status">{me.id}</span>}
-          {me?.roles.map((role) => (
+          {/* F-01: /api/v1/me's contract promises roles: string[], but a
+              runtime response is not guaranteed to keep that promise —
+              matches the Array.isArray guard Users.tsx already uses for the
+              same class of field. Malformed data degrades to zero displayed
+              roles, never to a default/invented one. */}
+          {(Array.isArray(me?.roles) ? me.roles : []).map((role) => (
             <span className="status role" key={role}>
               {role}
             </span>

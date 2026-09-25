@@ -4,23 +4,12 @@ import type { HumanAccount, HumanAccountList, HumanRole } from "../api/types";
 import { DataState } from "../components/DataState";
 import { useResource } from "../hooks/useResource";
 import { useSession } from "../session";
+import { HUMAN_ROLES, ROLE_LABELS } from "../lib/roles";
 
 const DATE_TIME = new Intl.DateTimeFormat("uk-UA", {
   dateStyle: "medium",
   timeStyle: "short",
 });
-
-const ROLE_LABELS: Record<HumanRole, string> = {
-  admin: "Адміністратор",
-  manager: "Менеджер",
-  developer: "Розробник",
-  qa: "QA",
-  support: "Підтримка",
-  devops: "DevOps",
-  customer: "Клієнт",
-};
-
-const HUMAN_ROLES = Object.keys(ROLE_LABELS) as HumanRole[];
 
 function formatDateTime(value?: string): string {
   if (!value) return "—";
