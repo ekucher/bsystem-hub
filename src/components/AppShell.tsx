@@ -22,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   // the platform, so there is nothing to hide the link behind.
   { to: "/notifications", label: "Сповіщення" },
   { to: "/admin/users", label: "Користувачі", permission: "identity.user.read" },
+  { to: "/admin/modules", label: "Модулі", permission: "module.admin" },
   { to: "/profile", label: "Профіль" },
 ];
 
