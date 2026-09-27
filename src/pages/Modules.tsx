@@ -316,7 +316,21 @@ function ModuleActions({
             ))}
           </select>
         </label>
-        <button type="button" disabled={busy || activatingWithoutRoles} onClick={() => void patch({ status })}>
+        <button
+          type="button"
+          disabled={busy || activatingWithoutRoles}
+          // Sends `allowed_roles` together with `status` in the same PATCH,
+          // not just `status` alone: the two were previously saved by
+          // separate buttons/requests, so `activatingWithoutRoles` below
+          // (checked against this component's own draft `roles` state) could
+          // pass while the server's actually-persisted `allowed_roles` was
+          // still empty — an admin could tick role checkboxes without
+          // clicking "Зберегти ролі", then click "Зберегти статус" alone,
+          // shipping status:"active" with allowed_roles still []. Bundling
+          // both fields into the one request that flips status makes the
+          // guard's check and what gets persisted the same operation.
+          onClick={() => void patch({ status, allowed_roles: roles })}
+        >
           Зберегти статус
         </button>
         {activatingWithoutRoles && (

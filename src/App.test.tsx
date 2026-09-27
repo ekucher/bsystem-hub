@@ -424,11 +424,60 @@ describe("authorization in the interface", () => {
           (call) =>
             call.method === "PATCH" &&
             call.url.endsWith("/api/v1/admin/modules/crm") &&
-            call.body === '{"status":"maintenance"}',
+            call.body === '{"status":"maintenance","allowed_roles":["admin","manager"]}',
         ),
       ).toBe(true),
     );
     expect(await scope.findByText("Збережено.")).toBeInTheDocument();
+  });
+
+  // Regression test for a two-axis /code-review finding: status and
+  // allowed_roles used to save through two independent PATCH requests, and
+  // the "can't activate without roles" guard checked only this component's
+  // own draft `roles` state -- not what the server actually had persisted.
+  // An admin could tick a role checkbox (satisfying the guard locally)
+  // without ever clicking "Зберегти ролі", then click "Зберегти статус"
+  // alone, shipping status:"active" while the server's own allowed_roles
+  // stayed []: a module live with nobody able to see it, exactly what the
+  // guard exists to prevent.
+  it("cannot activate a module while its saved allowed_roles is empty, even with an unsaved role checked locally", async () => {
+    let stored: Record<string, unknown> = { ...ADMIN_MODULES[0], status: "disabled", allowed_roles: [] };
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = init?.method ?? "GET";
+      const body = typeof init?.body === "string" ? init.body : undefined;
+
+      if (url.includes("/api/v1/notifications")) {
+        return new Response(JSON.stringify(NOTIFICATIONS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/v1/admin/modules/allowed-origins")) {
+        return new Response(JSON.stringify(ALLOWED_ORIGINS), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.endsWith("/api/v1/admin/modules/crm") && method === "PATCH") {
+        stored = { ...stored, ...JSON.parse(body as string) };
+        return new Response(JSON.stringify(stored), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      if (url.includes("/api/v1/admin/modules")) {
+        return new Response(JSON.stringify([stored]), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ error: "not stubbed" }), { status: 404, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+
+    renderWithSession(<AppRoutes />, { fetchImpl, route: "/admin/modules" });
+    const manage = await screen.findByText("Керувати");
+    await userEvent.click(manage);
+    const scope = within(manage.closest("details") as HTMLDetailsElement);
+
+    // Tick a role checkbox -- draft-only, "Зберегти ролі" is never clicked.
+    await userEvent.click(scope.getByLabelText("Адміністратор"));
+    // Flip status to active and save *only* the status button.
+    await userEvent.selectOptions(scope.getByLabelText("Статус"), "active");
+    await userEvent.click(scope.getByRole("button", { name: "Зберегти статус" }));
+
+    await waitFor(() => expect(stored.status).toBe("active"));
+    // The exploit this test guards against: allowed_roles landing empty
+    // alongside an active status because it was never actually sent.
+    expect(stored.allowed_roles).toEqual(["admin"]);
   });
 
   // The full admin lifecycle the spec describes: create -> assign roles ->
@@ -514,7 +563,7 @@ describe("authorization in the interface", () => {
     await userEvent.selectOptions(manageScope.getByLabelText("Статус"), "active");
     await userEvent.click(manageScope.getByRole("button", { name: "Зберегти статус" }));
     await waitFor(() =>
-      expect(calls.some((c) => c.method === "PATCH" && c.body === '{"status":"active"}')).toBe(true),
+      expect(calls.some((c) => c.method === "PATCH" && c.body === '{"status":"active","allowed_roles":["admin"]}')).toBe(true),
     );
     expect(stored).toMatchObject({
       status: "active",
