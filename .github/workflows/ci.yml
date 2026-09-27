@@ -72,6 +72,19 @@ jobs:
         working-directory: bsystem-hub
         run: bash scripts/tests/contract-gate.test.sh
 
+  no-real-hostnames:
+    name: No real hostnames committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Check for real-looking hostnames
+        run: node scripts/check-no-real-hostnames.mjs
+
   build:
     runs-on: ubuntu-latest
     steps:
