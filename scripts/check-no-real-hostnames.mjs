@@ -27,6 +27,10 @@ const ALLOWED_HOSTS = new Set([
   '127.0.0.1', '0.0.0.0', '::1',
   'github.com', 'www.w3.org',
   'localhost',
+  // Referenced by this repo's own CLAUDE.md ("...Claude Code (claude.ai/code)
+  // when working with code in this repository") -- a real but generic,
+  // non-sensitive third-party product reference, not a deployment leak.
+  'claude.ai',
 ]);
 
 const HOST_RE = /\bhttps?:\/\/([a-zA-Z0-9][a-zA-Z0-9.-]*)/g;
